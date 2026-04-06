@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-mist text-slate-900 antialiased;
+  background-image:
+    radial-gradient(circle at top left, rgba(249, 115, 22, 0.12), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(15, 118, 110, 0.12), transparent 24%),
+    linear-gradient(180deg, #fffdf8 0%, #f8fafc 100%);
+}
+
+a {
+  @apply transition-colors duration-200;
+}
+
+::selection {
+  @apply bg-orange-200 text-slate-900;
+}
