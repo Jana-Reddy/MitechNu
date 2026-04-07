@@ -2,6 +2,7 @@
   "name": "edtech-academy",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@11.11.0",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -11,12 +12,16 @@
     "build": "npm run build -w @academy/web",
     "start": "npm run start -w @academy/web",
     "test": "vitest run",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "db:generate": "node scripts/run-with-app-env.mjs drizzle-kit generate",
+    "db:push": "node scripts/run-with-app-env.mjs drizzle-kit push",
+    "db:seed": "node scripts/run-with-app-env.mjs tsx packages/db/src/postgres-seed.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "drizzle-kit": "^0.31.10",
     "tsx": "^4.19.3",
     "typescript": "^5.8.3",
     "vitest": "^3.1.4"
