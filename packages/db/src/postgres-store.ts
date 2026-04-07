@@ -129,7 +129,19 @@ async function withFallback<T>(operation: () => Promise<T>, fallback: () => Prom
     return await operation();
   } catch (error) {
     const allowDemoFallback = process.env.NODE_ENV !== "production" && process.env.VERCEL !== "1";
-    if (!allowDemoFallback) {
+    const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+    const looksLikeConnectionFailure =
+      message.includes("connect") ||
+      message.includes("connection") ||
+      message.includes("websocket") ||
+      message.includes("fetch failed") ||
+      message.includes("econnrefused") ||
+      message.includes("enotfound") ||
+      message.includes("timeout") ||
+      message.includes("network") ||
+      message.includes("server has closed the connection");
+
+    if (!allowDemoFallback || !looksLikeConnectionFailure) {
       throw error;
     }
     return fallback();
