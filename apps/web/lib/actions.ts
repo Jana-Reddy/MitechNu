@@ -95,14 +95,34 @@ export async function createCourseAction(formData: FormData) {
   if (!user || user.role !== "admin") {
     redirect("/login");
   }
-  await createCourse({
-    title: String(formData.get("title") ?? ""),
-    slug: String(formData.get("slug") ?? ""),
-    excerpt: String(formData.get("excerpt") ?? ""),
-    description: String(formData.get("description") ?? ""),
-    priceInr: Number(formData.get("priceInr") ?? 0),
-    categoryId: String(formData.get("categoryId") ?? "")
-  });
+  const title = String(formData.get("title") ?? "").trim();
+  const slug = String(formData.get("slug") ?? "").trim().toLowerCase();
+  const excerpt = String(formData.get("excerpt") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const priceInr = Number(formData.get("priceInr") ?? 0);
+  const categoryId = String(formData.get("categoryId") ?? "").trim();
+
+  if (!title || !slug || !excerpt || !description || !categoryId || !Number.isFinite(priceInr) || priceInr <= 0) {
+    redirect("/admin?error=invalid-course");
+  }
+
+  try {
+    await createCourse({
+      title,
+      slug,
+      excerpt,
+      description,
+      priceInr,
+      categoryId
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("slug")) {
+      redirect("/admin?error=duplicate-slug");
+    }
+    redirect("/admin?error=course-create");
+  }
+
   redirect("/admin?courseCreated=1");
 }
 

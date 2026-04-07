@@ -5,13 +5,31 @@ import { getCurrentUser } from "../../lib/auth";
 import { approvePaymentAction, createCourseAction } from "../../lib/actions";
 import { formatInr } from "../../lib/utils";
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams
+}: {
+  searchParams: Promise<{ reviewed?: string; courseCreated?: string; error?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") {
     redirect("/login");
   }
 
+  const query = await searchParams;
   const [overview, categories] = await Promise.all([getAdminOverview(), listCategories()]);
+
+  const notice =
+    query.courseCreated
+      ? { tone: "success", message: "Draft course created successfully." }
+      : query.reviewed
+        ? { tone: "success", message: "Payment review saved." }
+        : query.error === "duplicate-slug"
+          ? { tone: "error", message: "That course slug already exists. Choose a different slug." }
+          : query.error === "invalid-course"
+            ? { tone: "error", message: "Please fill in all course fields and use a valid price." }
+            : query.error === "course-create"
+              ? { tone: "error", message: "Course creation failed. Please try again." }
+              : null;
 
   return (
     <SectionShell>
@@ -22,6 +40,15 @@ export default async function AdminPage() {
           <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600">
             Manage catalog publishing, learner payments, and launch metrics from one self-hostable admin experience.
           </p>
+          {notice ? (
+            <div className={`mt-6 rounded-2xl px-4 py-3 text-sm ${
+              notice.tone === "success"
+                ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border border-red-200 bg-red-50 text-red-700"
+            }`}>
+              {notice.message}
+            </div>
+          ) : null}
         </div>
 
         <section className="grid gap-4 md:grid-cols-4">

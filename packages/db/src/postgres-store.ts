@@ -127,7 +127,11 @@ function mapOrderRow(row: typeof orders.$inferSelect) {
 async function withFallback<T>(operation: () => Promise<T>, fallback: () => Promise<T>): Promise<T> {
   try {
     return await operation();
-  } catch {
+  } catch (error) {
+    const allowDemoFallback = process.env.NODE_ENV !== "production" && process.env.VERCEL !== "1";
+    if (!allowDemoFallback) {
+      throw error;
+    }
     return fallback();
   }
 }
@@ -662,6 +666,20 @@ export async function getAdminOverview() {
 
 export async function createCourse(input: { title: string; slug: string; excerpt: string; description: string; priceInr: number; categoryId: string }) {
   return withFallback(async () => {
+    const existing = await db.query.courses.findFirst({
+      where: eq(courses.slug, input.slug)
+    });
+    if (existing) {
+      throw new Error("A course with this slug already exists.");
+    }
+
+    const category = await db.query.categories.findFirst({
+      where: eq(categories.id, input.categoryId)
+    });
+    if (!category) {
+      throw new Error("Category not found.");
+    }
+
     const course: typeof courses.$inferInsert = {
       id: randomUUID(),
       categoryId: input.categoryId,
