@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { calculateCourseProgress, calculateDiscountedPrice, getFeaturedCourses } from "./domain";
 import { hashPassword, verifyPassword } from "./auth-utils";
 import { seedData } from "./seed";
-import type { AiChatMessage, Certificate, Course, DemoStore, NoteRecord, Order, PaymentStatus, User, UserRole } from "./types";
+import type { AiChatMessage, Certificate, Course, DemoStore, NoteRecord, Order, PaymentSettings, PaymentStatus, User, UserRole } from "./types";
 
 const storePath = join(process.cwd(), "runtime", "demo-store.json");
 
@@ -19,7 +19,11 @@ async function ensureStoreFile() {
 
 async function readStore(): Promise<DemoStore> {
   await ensureStoreFile();
-  return JSON.parse(await readFile(storePath, "utf8")) as DemoStore;
+  const store = JSON.parse(await readFile(storePath, "utf8")) as DemoStore;
+  return {
+    ...store,
+    paymentSettings: store.paymentSettings ?? []
+  };
 }
 
 async function writeStore(store: DemoStore) {
@@ -144,10 +148,25 @@ export async function getDashboardData(userId: string) {
     .filter((enrollment) => enrollment.userId === userId)
     .map((enrollment) => store.courses.find((course) => course.id === enrollment.courseId))
     .filter(Boolean)
-    .map((course) => ({
-      ...summarizeCourse(course!, store),
-      progress: calculateCourseProgress(store.modules, store.lessons, userProgress, course!.id)
-    }));
+    .map((course) => {
+      const lessonsForCourse = store.lessons.filter((lesson) =>
+        store.modules.some((module) => module.courseId === course!.id && module.id === lesson.moduleId)
+      );
+      const progressForCourse = userProgress.filter((item) => item.courseId === course!.id);
+      const firstIncomplete = lessonsForCourse.find((lesson) => !progressForCourse.find((item) => item.lessonId === lesson.id && item.completed));
+      const mostRecent = [...progressForCourse].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+      const resumeLesson = firstIncomplete ?? lessonsForCourse.find((lesson) => lesson.id === mostRecent?.lessonId) ?? lessonsForCourse[0];
+      const certificate = store.certificates.find((item) => item.userId === userId && item.courseId === course!.id);
+
+      return {
+        ...summarizeCourse(course!, store),
+        progress: calculateCourseProgress(store.modules, store.lessons, userProgress, course!.id),
+        completedLessons: progressForCourse.filter((item) => item.completed).length,
+        resumeLessonSlug: resumeLesson?.slug,
+        resumeLessonTitle: resumeLesson?.title,
+        certificateNumber: certificate?.certificateNumber
+      };
+    });
 
   return {
     activeCourses,
@@ -174,13 +193,24 @@ export async function getLearnerLessonView(userId: string, courseSlug: string, l
     return { course, lesson, blocked: true as const };
   }
 
+  const orderedLessons = store.lessons.filter((item) => moduleIds.includes(item.moduleId)).sort((a, b) => a.order - b.order);
+
   return {
     course,
     lesson,
-    lessons: store.lessons.filter((item) => moduleIds.includes(item.moduleId)).sort((a, b) => a.order - b.order),
+    lessons: orderedLessons,
     progress: store.progress.find((item) => item.userId === userId && item.lessonId === lesson.id),
     notes: store.notes.filter((item) => item.userId === userId && item.lessonId === lesson.id),
     assets: store.assets.filter((item) => item.lessonId === lesson.id),
+    aiMessages: store.aiMessages
+      .filter((item) => item.userId === userId && item.lessonId === lesson.id)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    progressPercent: calculateCourseProgress(store.modules, store.lessons, store.progress.filter((item) => item.userId === userId), course.id),
+    completedLessons: store.progress.filter((item) => item.userId === userId && item.courseId === course.id && item.completed).length,
+    totalLessons: orderedLessons.length,
+    previousLessonSlug: [...orderedLessons].reverse().find((item) => item.order < lesson.order)?.slug,
+    nextLessonSlug: orderedLessons.find((item) => item.order > lesson.order)?.slug,
+    certificate: store.certificates.find((item) => item.userId === userId && item.courseId === course.id),
     blocked: false as const
   };
 }
@@ -224,12 +254,13 @@ export async function createOrder(input: { userId: string; courseSlug: string; c
   return order;
 }
 
-export async function submitPaymentProof(input: { orderId: string; reference: string; notes?: string }) {
+export async function submitPaymentProof(input: { orderId: string; reference: string; notes?: string; screenshotUrl?: string }) {
   const store = await readStore();
   const existing = store.payments.find((item) => item.orderId === input.orderId);
   if (existing) {
     existing.reference = input.reference;
     existing.notes = input.notes;
+    existing.screenshotUrl = input.screenshotUrl;
     existing.status = "proof_submitted";
   } else {
     store.payments.push({
@@ -237,6 +268,7 @@ export async function submitPaymentProof(input: { orderId: string; reference: st
       orderId: input.orderId,
       reference: input.reference,
       notes: input.notes,
+      screenshotUrl: input.screenshotUrl,
       status: "proof_submitted"
     });
   }
@@ -315,10 +347,39 @@ export async function createNote(input: { userId: string; lessonId: string; cont
   return note;
 }
 
+export async function updateNote(input: { userId: string; noteId: string; content: string }) {
+  const store = await readStore();
+  const note = store.notes.find((item) => item.id === input.noteId && item.userId === input.userId);
+  if (!note) {
+    throw new Error("Note not found.");
+  }
+
+  note.content = input.content;
+  await writeStore(store);
+  return note;
+}
+
+export async function deleteNote(input: { userId: string; noteId: string }) {
+  const store = await readStore();
+  const index = store.notes.findIndex((item) => item.id === input.noteId && item.userId === input.userId);
+  if (index === -1) {
+    throw new Error("Note not found.");
+  }
+
+  store.notes.splice(index, 1);
+  await writeStore(store);
+}
+
 export async function appendAiMessage(message: AiChatMessage) {
   const store = await readStore();
   store.aiMessages.push(message);
   await writeStore(store);
+}
+
+export async function getAiTutorUsage(userId: string, windowMinutes = 60) {
+  const store = await readStore();
+  const cutoff = Date.now() - windowMinutes * 60 * 1000;
+  return store.aiMessages.filter((message) => message.userId === userId && message.role === "user" && new Date(message.createdAt).getTime() >= cutoff).length;
 }
 
 export async function getAdminOverview() {
@@ -339,6 +400,32 @@ export async function getAdminOverview() {
     })),
     coupons: store.coupons
   };
+}
+
+export async function getPaymentSettings() {
+  const store = await readStore();
+  return store.paymentSettings[0] ?? null;
+}
+
+export async function upsertPaymentSettings(input: {
+  upiId?: string;
+  payeeName?: string;
+  qrCodeUrl?: string;
+  note?: string;
+}) {
+  const store = await readStore();
+  const settings: PaymentSettings = {
+    id: store.paymentSettings[0]?.id ?? "default",
+    upiId: input.upiId,
+    payeeName: input.payeeName,
+    qrCodeUrl: input.qrCodeUrl,
+    note: input.note,
+    updatedAt: new Date().toISOString()
+  };
+
+  store.paymentSettings = [settings];
+  await writeStore(store);
+  return settings;
 }
 
 export async function createCourse(input: { title: string; slug: string; excerpt: string; description: string; priceInr: number; categoryId: string }) {

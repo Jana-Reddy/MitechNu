@@ -127,6 +127,15 @@ export const payments = pgTable("payments", {
   reviewedAt: timestamp("reviewed_at", { withTimezone: true })
 });
 
+export const paymentSettings = pgTable("payment_settings", {
+  id: text("id").primaryKey(),
+  upiId: text("upi_id"),
+  payeeName: text("payee_name"),
+  qrCodeUrl: text("qr_code_url"),
+  note: text("note"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull()
+});
+
 export const certificates = pgTable("certificates", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => users.id),

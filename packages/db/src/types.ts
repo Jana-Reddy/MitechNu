@@ -123,6 +123,15 @@ export interface Payment {
   reviewedAt?: string;
 }
 
+export interface PaymentSettings {
+  id: string;
+  upiId?: string;
+  payeeName?: string;
+  qrCodeUrl?: string;
+  note?: string;
+  updatedAt: string;
+}
+
 export interface Certificate {
   id: string;
   userId: string;
@@ -163,8 +172,8 @@ export interface DemoStore {
   coupons: Coupon[];
   orders: Order[];
   payments: Payment[];
+  paymentSettings: PaymentSettings[];
   certificates: Certificate[];
   aiMessages: AiChatMessage[];
   auditLogs: AuditLog[];
 }
-

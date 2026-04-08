@@ -221,8 +221,17 @@ export const seedData: DemoStore = {
       status: "proof_submitted"
     }
   ],
+  paymentSettings: [
+    {
+      id: "default",
+      upiId: "academy@upi",
+      payeeName: "Mi.Tech.Nu Courses",
+      qrCodeUrl: "https://example.com/upi-qr.png",
+      note: "Share your UTR after payment so access can be approved quickly.",
+      updatedAt: now
+    }
+  ],
   certificates: [],
   aiMessages: [],
   auditLogs: []
 };
-

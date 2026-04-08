@@ -13,6 +13,7 @@ import {
   modules,
   notes,
   orders,
+  paymentSettings,
   payments,
   progressRecords,
   users
@@ -27,6 +28,7 @@ import type {
   Module,
   NoteRecord,
   Payment,
+  PaymentSettings,
   PaymentStatus,
   ProgressRecord,
   User,
@@ -37,7 +39,8 @@ import { hashPassword, verifyPassword } from "./auth-utils";
 import * as demoStore from "./demo-store";
 
 type CourseSummary = Course & { category?: Category; lessonCount: number };
-type CourseWithModules = CourseSummary & { modules: Array<Module & { lessons: Lesson[] }> };
+type CourseLessonWithAssets = Lesson & { assets: LessonAsset[] };
+type CourseWithModules = CourseSummary & { modules: Array<Module & { lessons: CourseLessonWithAssets[] }> };
 
 function toIsoString(value: Date | string | null | undefined) {
   if (!value) {
@@ -116,6 +119,17 @@ function mapPayment(row: typeof payments.$inferSelect): Payment {
   };
 }
 
+function mapPaymentSettings(row: typeof paymentSettings.$inferSelect): PaymentSettings {
+  return {
+    id: row.id,
+    upiId: row.upiId ?? undefined,
+    payeeName: row.payeeName ?? undefined,
+    qrCodeUrl: row.qrCodeUrl ?? undefined,
+    note: row.note ?? undefined,
+    updatedAt: toIsoString(row.updatedAt) ?? new Date(0).toISOString()
+  };
+}
+
 function mapOrderRow(row: typeof orders.$inferSelect) {
   return {
     ...row,
@@ -190,11 +204,52 @@ async function getCourseStructure(courseId: string) {
   const lessonRows = moduleIds.length
     ? await db.select().from(lessons).where(inArray(lessons.moduleId, moduleIds)).orderBy(asc(lessons.order))
     : [];
+  const lessonIds = lessonRows.map((lesson) => lesson.id);
+  const assetRows = lessonIds.length
+    ? await db.select().from(lessonAssets).where(inArray(lessonAssets.lessonId, lessonIds))
+    : [];
 
   return moduleRows.map((module) => ({
     ...mapModule(module),
-    lessons: lessonRows.filter((lesson) => lesson.moduleId === module.id).map(mapLesson)
+    lessons: lessonRows
+      .filter((lesson) => lesson.moduleId === module.id)
+      .map((lesson) => ({
+        ...mapLesson(lesson),
+        assets: assetRows.filter((asset) => asset.lessonId === lesson.id).map(mapAsset)
+      }))
   }));
+}
+
+async function getLessonWithCourse(lessonId: string) {
+  const lesson = await db.query.lessons.findFirst({
+    where: eq(lessons.id, lessonId)
+  });
+  if (!lesson) {
+    return null;
+  }
+
+  const module = await db.query.modules.findFirst({
+    where: eq(modules.id, lesson.moduleId)
+  });
+  if (!module) {
+    return null;
+  }
+
+  const course = await db.query.courses.findFirst({
+    where: eq(courses.id, module.courseId)
+  });
+  if (!course) {
+    return null;
+  }
+
+  return { lesson, module, course };
+}
+
+function getResumeLesson(lessonsForCourse: Lesson[], progressForCourse: ProgressRecord[]) {
+  const progressByLessonId = new Map(progressForCourse.map((record) => [record.lessonId, record]));
+  const firstIncomplete = lessonsForCourse.find((lesson) => !progressByLessonId.get(lesson.id)?.completed);
+  const mostRecent = [...progressForCourse].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  return firstIncomplete ?? lessonsForCourse.find((lesson) => lesson.id === mostRecent?.lessonId) ?? lessonsForCourse[0];
 }
 
 export async function getCatalog() {
@@ -232,7 +287,23 @@ export async function getCourseBySlug(slug: string): Promise<CourseWithModules |
       lessonCount: modulesWithLessons.reduce((sum, module) => sum + module.lessons.length, 0),
       modules: modulesWithLessons
     };
-  }, () => demoStore.getCourseBySlug(slug));
+  }, async () => {
+    const course = await demoStore.getCourseBySlug(slug);
+    if (!course) {
+      return null;
+    }
+
+    return {
+      ...course,
+      modules: course.modules.map((module) => ({
+        ...module,
+        lessons: module.lessons.map((lesson) => ({
+          ...lesson,
+          assets: []
+        }))
+      }))
+    };
+  });
 }
 
 export async function authenticateUser(email: string, password: string) {
@@ -347,14 +418,15 @@ export async function hasEnrollment(userId: string, courseId: string) {
 
 export async function getDashboardData(userId: string) {
   return withFallback(async () => {
-    const [enrollmentRows, progressRows, noteRows, orderRows, courseRows, moduleRows, lessonRows] = await Promise.all([
+    const [enrollmentRows, progressRows, noteRows, orderRows, courseRows, moduleRows, lessonRows, certificateRows] = await Promise.all([
       db.select().from(enrollments).where(eq(enrollments.userId, userId)),
       db.select().from(progressRecords).where(eq(progressRecords.userId, userId)),
       db.select().from(notes).where(eq(notes.userId, userId)).orderBy(desc(notes.createdAt)),
       db.select().from(orders).where(and(eq(orders.userId, userId), eq(orders.status, "pending"))),
       db.select().from(courses),
       db.select().from(modules),
-      db.select().from(lessons)
+      db.select().from(lessons),
+      db.select().from(certificates).where(eq(certificates.userId, userId))
     ]);
 
     const activeCourseIds = enrollmentRows.map((enrollment) => enrollment.courseId);
@@ -362,8 +434,27 @@ export async function getDashboardData(userId: string) {
       .filter((course) => activeCourseIds.includes(course.id))
       .map((course) => ({
         ...mapCourse(course),
-        lessonCount: lessonRows.filter((lesson) => moduleRows.some((module) => module.courseId === course.id && module.id === lesson.moduleId)).length,
-        progress: calculateCourseProgress(moduleRows.map(mapModule), lessonRows.map(mapLesson), progressRows.map(mapProgress), course.id)
+        ...(() => {
+          const lessonsForCourse = lessonRows
+            .filter((lesson) => moduleRows.some((module) => module.courseId === course.id && module.id === lesson.moduleId))
+            .map(mapLesson);
+          const progressForCourse = progressRows
+            .filter((record) => record.courseId === course.id)
+            .map(mapProgress);
+          const progress = calculateCourseProgress(moduleRows.map(mapModule), lessonRows.map(mapLesson), progressRows.map(mapProgress), course.id);
+          const completedLessons = progressForCourse.filter((record) => record.completed).length;
+          const resumeLesson = lessonsForCourse.length ? getResumeLesson(lessonsForCourse, progressForCourse) : undefined;
+          const certificate = certificateRows.find((item) => item.courseId === course.id);
+
+          return {
+            lessonCount: lessonsForCourse.length,
+            completedLessons,
+            progress,
+            resumeLessonSlug: resumeLesson?.slug,
+            resumeLessonTitle: resumeLesson?.title,
+            certificateNumber: certificate?.certificateNumber
+          };
+        })()
       }));
 
     return {
@@ -405,7 +496,7 @@ export async function getLearnerLessonView(userId: string, courseSlug: string, l
       };
     }
 
-    const [allLessons, progressRow, noteRows, assetRows] = await Promise.all([
+    const [allLessons, progressRow, noteRows, assetRows, allProgressRows, certificateRow, aiRows] = await Promise.all([
       moduleIds.length
         ? db.select().from(lessons).where(inArray(lessons.moduleId, moduleIds)).orderBy(asc(lessons.order))
         : Promise.resolve([]),
@@ -413,16 +504,41 @@ export async function getLearnerLessonView(userId: string, courseSlug: string, l
         where: and(eq(progressRecords.userId, userId), eq(progressRecords.lessonId, lessonRow.id))
       }),
       db.select().from(notes).where(and(eq(notes.userId, userId), eq(notes.lessonId, lessonRow.id))).orderBy(desc(notes.createdAt)),
-      db.select().from(lessonAssets).where(eq(lessonAssets.lessonId, lessonRow.id))
+      db.select().from(lessonAssets).where(eq(lessonAssets.lessonId, lessonRow.id)),
+      db.select().from(progressRecords).where(and(eq(progressRecords.userId, userId), eq(progressRecords.courseId, course.id))),
+      db.query.certificates.findFirst({
+        where: and(eq(certificates.userId, userId), eq(certificates.courseId, course.id))
+      }),
+      db
+        .select()
+        .from(aiMessages)
+        .where(and(eq(aiMessages.userId, userId), eq(aiMessages.lessonId, lessonRow.id)))
+        .orderBy(asc(aiMessages.createdAt))
     ]);
+
+    const mappedLessons = allLessons.map(mapLesson);
+    const mappedProgressRows = allProgressRows.map(mapProgress);
+    const currentLessonIndex = mappedLessons.findIndex((lesson) => lesson.id === lessonRow.id);
+    const completedLessons = mappedProgressRows.filter((record) => record.completed).length;
+    const courseProgress = calculateCourseProgress(moduleRows.map(mapModule), mappedLessons, mappedProgressRows, course.id);
 
     return {
       course: mapCourse(course),
       lesson: mapLesson(lessonRow),
-      lessons: allLessons.map(mapLesson),
+      lessons: mappedLessons,
       progress: progressRow ? mapProgress(progressRow) : undefined,
       notes: noteRows.map(mapNote),
       assets: assetRows.map(mapAsset),
+      aiMessages: aiRows.map((row) => ({
+        ...row,
+        createdAt: toIsoString(row.createdAt) ?? new Date(0).toISOString()
+      })),
+      progressPercent: courseProgress,
+      completedLessons,
+      totalLessons: mappedLessons.length,
+      previousLessonSlug: currentLessonIndex > 0 ? mappedLessons[currentLessonIndex - 1]?.slug : undefined,
+      nextLessonSlug: currentLessonIndex >= 0 ? mappedLessons[currentLessonIndex + 1]?.slug : undefined,
+      certificate: certificateRow ? mapCertificate(certificateRow) : undefined,
       blocked: false as const
     };
   }, () => demoStore.getLearnerLessonView(userId, courseSlug, lessonSlug));
@@ -465,6 +581,27 @@ export async function createOrder(input: { userId: string; courseSlug: string; c
     if (!course) {
       throw new Error("Course not found.");
     }
+    if (course.status !== "published") {
+      throw new Error("Only published courses can be ordered.");
+    }
+
+    const existingEnrollment = await db.query.enrollments.findFirst({
+      where: and(eq(enrollments.userId, input.userId), eq(enrollments.courseId, course.id))
+    });
+    if (existingEnrollment) {
+      throw new Error("You are already enrolled in this course.");
+    }
+
+    const existingOrder = await db.query.orders.findFirst({
+      where: and(
+        eq(orders.userId, input.userId),
+        eq(orders.courseId, course.id),
+        inArray(orders.status, ["pending", "approved"])
+      )
+    });
+    if (existingOrder) {
+      throw new Error("An active order already exists for this course.");
+    }
 
     const coupon = input.couponCode
       ? await db.query.coupons.findFirst({
@@ -490,8 +627,15 @@ export async function createOrder(input: { userId: string; courseSlug: string; c
   }, () => demoStore.createOrder(input));
 }
 
-export async function submitPaymentProof(input: { orderId: string; reference: string; notes?: string }) {
+export async function submitPaymentProof(input: { orderId: string; reference: string; notes?: string; screenshotUrl?: string }) {
   return withFallback(async () => {
+    const order = await db.query.orders.findFirst({
+      where: eq(orders.id, input.orderId)
+    });
+    if (!order) {
+      throw new Error("Order not found.");
+    }
+
     const existing = await db.query.payments.findFirst({
       where: eq(payments.orderId, input.orderId)
     });
@@ -502,6 +646,7 @@ export async function submitPaymentProof(input: { orderId: string; reference: st
         .set({
           reference: input.reference,
           notes: input.notes,
+          screenshotUrl: input.screenshotUrl,
           status: "proof_submitted"
         })
         .where(eq(payments.id, existing.id));
@@ -513,6 +658,7 @@ export async function submitPaymentProof(input: { orderId: string; reference: st
       orderId: input.orderId,
       reference: input.reference,
       notes: input.notes,
+      screenshotUrl: input.screenshotUrl,
       status: "proof_submitted"
     });
   }, () => demoStore.submitPaymentProof(input));
@@ -564,6 +710,16 @@ export async function reviewPayment(input: { orderId: string; reviewerUserId: st
 
 export async function upsertProgress(input: { userId: string; courseId: string; lessonId: string; completed: boolean; watchPositionSeconds: number }) {
   return withFallback(async () => {
+    const lessonContext = await getLessonWithCourse(input.lessonId);
+    if (!lessonContext || lessonContext.course.id !== input.courseId) {
+      throw new Error("Lesson not found for this course.");
+    }
+
+    const enrolled = await hasEnrollment(input.userId, input.courseId);
+    if (!enrolled && !lessonContext.lesson.isPreview) {
+      throw new Error("Enrollment is required to track progress for this lesson.");
+    }
+
     const existing = await db.query.progressRecords.findFirst({
       where: and(eq(progressRecords.userId, input.userId), eq(progressRecords.lessonId, input.lessonId))
     });
@@ -617,6 +773,16 @@ export async function upsertProgress(input: { userId: string; courseId: string; 
 
 export async function createNote(input: { userId: string; lessonId: string; content: string }) {
   return withFallback(async () => {
+    const lessonContext = await getLessonWithCourse(input.lessonId);
+    if (!lessonContext) {
+      throw new Error("Lesson not found.");
+    }
+
+    const enrolled = await hasEnrollment(input.userId, lessonContext.course.id);
+    if (!enrolled && !lessonContext.lesson.isPreview) {
+      throw new Error("Enrollment is required to save notes for this lesson.");
+    }
+
     const note: typeof notes.$inferInsert = {
       id: randomUUID(),
       userId: input.userId,
@@ -633,13 +799,70 @@ export async function createNote(input: { userId: string; lessonId: string; cont
   }, () => demoStore.createNote(input));
 }
 
+export async function updateNote(input: { userId: string; noteId: string; content: string }) {
+  return withFallback(async () => {
+    const existing = await db.query.notes.findFirst({
+      where: and(eq(notes.id, input.noteId), eq(notes.userId, input.userId))
+    });
+    if (!existing) {
+      throw new Error("Note not found.");
+    }
+
+    await db
+      .update(notes)
+      .set({
+        content: input.content
+      })
+      .where(eq(notes.id, input.noteId));
+
+    const updated = await db.query.notes.findFirst({
+      where: eq(notes.id, input.noteId)
+    });
+    if (!updated) {
+      throw new Error("Note update failed.");
+    }
+
+    return mapNote(updated);
+  }, () => demoStore.updateNote(input));
+}
+
+export async function deleteNote(input: { userId: string; noteId: string }) {
+  return withFallback(async () => {
+    const existing = await db.query.notes.findFirst({
+      where: and(eq(notes.id, input.noteId), eq(notes.userId, input.userId))
+    });
+    if (!existing) {
+      throw new Error("Note not found.");
+    }
+
+    await db.delete(notes).where(eq(notes.id, input.noteId));
+  }, () => demoStore.deleteNote(input));
+}
+
 export async function appendAiMessage(message: AiChatMessage) {
   return withFallback(async () => {
+    const lessonContext = await getLessonWithCourse(message.lessonId);
+    if (!lessonContext || lessonContext.course.id !== message.courseId) {
+      throw new Error("Invalid lesson context.");
+    }
+
     await db.insert(aiMessages).values({
       ...message,
       createdAt: new Date(message.createdAt)
     });
   }, () => demoStore.appendAiMessage(message));
+}
+
+export async function getAiTutorUsage(userId: string, windowMinutes = 60) {
+  return withFallback(async () => {
+    const cutoff = new Date(Date.now() - windowMinutes * 60 * 1000);
+    const recentMessages = await db
+      .select()
+      .from(aiMessages)
+      .where(and(eq(aiMessages.userId, userId), eq(aiMessages.role, "user")));
+
+    return recentMessages.filter((message) => new Date(toIsoString(message.createdAt) ?? 0).getTime() >= cutoff.getTime()).length;
+  }, () => demoStore.getAiTutorUsage(userId, windowMinutes));
 }
 
 export async function getAdminOverview() {
@@ -674,6 +897,59 @@ export async function getAdminOverview() {
       coupons: couponRows
     };
   }, demoStore.getAdminOverview);
+}
+
+export async function getPaymentSettings() {
+  return withFallback(async () => {
+    try {
+      const settingsRow = await db.query.paymentSettings.findFirst();
+      return settingsRow ? mapPaymentSettings(settingsRow) : null;
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+      if (message.includes("payment_settings") && (message.includes("does not exist") || message.includes("relation"))) {
+        return null;
+      }
+      throw error;
+    }
+  }, () => demoStore.getPaymentSettings());
+}
+
+export async function upsertPaymentSettings(input: {
+  upiId?: string;
+  payeeName?: string;
+  qrCodeUrl?: string;
+  note?: string;
+}) {
+  return withFallback(async () => {
+    const existing = await db.query.paymentSettings.findFirst();
+    const values = {
+      upiId: input.upiId ?? null,
+      payeeName: input.payeeName ?? null,
+      qrCodeUrl: input.qrCodeUrl ?? null,
+      note: input.note ?? null,
+      updatedAt: new Date()
+    };
+
+    if (existing) {
+      await db.update(paymentSettings).set(values).where(eq(paymentSettings.id, existing.id));
+    } else {
+      await db.insert(paymentSettings).values({
+        id: "default",
+        ...values
+      });
+    }
+
+    const updated = await db.query.paymentSettings.findFirst({
+      where: eq(paymentSettings.id, existing?.id ?? "default")
+    });
+    if (!updated) {
+      throw new Error("Payment settings update failed.");
+    }
+
+    return mapPaymentSettings(updated);
+  }, async () => {
+    throw new Error("Payment settings require the Postgres data layer.");
+  });
 }
 
 export async function createCourse(input: { title: string; slug: string; excerpt: string; description: string; priceInr: number; categoryId: string }) {
@@ -714,6 +990,406 @@ export async function createCourse(input: { title: string; slug: string; excerpt
     await db.insert(courses).values(course);
     return mapCourse(course as typeof courses.$inferSelect);
   }, () => demoStore.createCourse(input));
+}
+
+export async function updateCourse(input: {
+  courseId: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  description: string;
+  priceInr: number;
+  categoryId: string;
+}) {
+  return withFallback(async () => {
+    const existingCourse = await db.query.courses.findFirst({
+      where: eq(courses.id, input.courseId)
+    });
+    if (!existingCourse) {
+      throw new Error("Course not found.");
+    }
+
+    const slugConflict = await db.query.courses.findFirst({
+      where: eq(courses.slug, input.slug)
+    });
+    if (slugConflict && slugConflict.id !== input.courseId) {
+      throw new Error("A course with this slug already exists.");
+    }
+
+    const category = await db.query.categories.findFirst({
+      where: eq(categories.id, input.categoryId)
+    });
+    if (!category) {
+      throw new Error("Category not found.");
+    }
+
+    await db
+      .update(courses)
+      .set({
+        title: input.title,
+        slug: input.slug,
+        excerpt: input.excerpt,
+        description: input.description,
+        priceInr: input.priceInr,
+        categoryId: input.categoryId
+      })
+      .where(eq(courses.id, input.courseId));
+
+    const updatedCourse = await db.query.courses.findFirst({
+      where: eq(courses.id, input.courseId)
+    });
+    if (!updatedCourse) {
+      throw new Error("Course update failed.");
+    }
+
+    return mapCourse(updatedCourse);
+  }, async () => {
+    throw new Error("Course editing requires the Postgres data layer.");
+  });
+}
+
+export async function setCourseStatus(input: { courseId: string; status: "draft" | "published" }) {
+  return withFallback(async () => {
+    const existingCourse = await db.query.courses.findFirst({
+      where: eq(courses.id, input.courseId)
+    });
+    if (!existingCourse) {
+      throw new Error("Course not found.");
+    }
+
+    await db
+      .update(courses)
+      .set({
+        status: input.status
+      })
+      .where(eq(courses.id, input.courseId));
+
+    const updatedCourse = await db.query.courses.findFirst({
+      where: eq(courses.id, input.courseId)
+    });
+    if (!updatedCourse) {
+      throw new Error("Course status update failed.");
+    }
+
+    return mapCourse(updatedCourse);
+  }, async () => {
+    throw new Error("Course publishing requires the Postgres data layer.");
+  });
+}
+
+export async function createModule(input: { courseId: string; title: string; description: string }) {
+  return withFallback(async () => {
+    const course = await db.query.courses.findFirst({
+      where: eq(courses.id, input.courseId)
+    });
+    if (!course) {
+      throw new Error("Course not found.");
+    }
+
+    const existingModules = await db.select().from(modules).where(eq(modules.courseId, input.courseId));
+    const nextOrder = existingModules.reduce((max, module) => Math.max(max, module.order), 0) + 1;
+
+    const moduleRecord: typeof modules.$inferInsert = {
+      id: randomUUID(),
+      courseId: input.courseId,
+      title: input.title,
+      description: input.description,
+      order: nextOrder
+    };
+
+    await db.insert(modules).values(moduleRecord);
+    return mapModule(moduleRecord as typeof modules.$inferSelect);
+  }, async () => {
+    throw new Error("Module creation requires the Postgres data layer.");
+  });
+}
+
+export async function createLesson(input: {
+  moduleId: string;
+  slug: string;
+  title: string;
+  type: "video" | "article" | "quiz" | "resource";
+  durationMinutes: number;
+  isPreview: boolean;
+  body: string;
+  videoKey?: string;
+}) {
+  return withFallback(async () => {
+    const module = await db.query.modules.findFirst({
+      where: eq(modules.id, input.moduleId)
+    });
+    if (!module) {
+      throw new Error("Module not found.");
+    }
+
+    const slugConflict = await db.query.lessons.findFirst({
+      where: eq(lessons.slug, input.slug)
+    });
+    if (slugConflict) {
+      throw new Error("A lesson with this slug already exists.");
+    }
+
+    const existingLessons = await db.select().from(lessons).where(eq(lessons.moduleId, input.moduleId));
+    const nextOrder = existingLessons.reduce((max, lesson) => Math.max(max, lesson.order), 0) + 1;
+
+    const lessonRecord: typeof lessons.$inferInsert = {
+      id: randomUUID(),
+      moduleId: input.moduleId,
+      slug: input.slug,
+      title: input.title,
+      type: input.type,
+      order: nextOrder,
+      durationMinutes: input.durationMinutes,
+      isPreview: input.isPreview,
+      body: input.body,
+      videoKey: input.videoKey
+    };
+
+    await db.insert(lessons).values(lessonRecord);
+    return mapLesson(lessonRecord as typeof lessons.$inferSelect);
+  }, async () => {
+    throw new Error("Lesson creation requires the Postgres data layer.");
+  });
+}
+
+export async function updateModule(input: { moduleId: string; title: string; description: string }) {
+  return withFallback(async () => {
+    const existingModule = await db.query.modules.findFirst({
+      where: eq(modules.id, input.moduleId)
+    });
+    if (!existingModule) {
+      throw new Error("Module not found.");
+    }
+
+    await db
+      .update(modules)
+      .set({
+        title: input.title,
+        description: input.description
+      })
+      .where(eq(modules.id, input.moduleId));
+
+    const updated = await db.query.modules.findFirst({
+      where: eq(modules.id, input.moduleId)
+    });
+    if (!updated) {
+      throw new Error("Module update failed.");
+    }
+
+    return mapModule(updated);
+  }, async () => {
+    throw new Error("Module editing requires the Postgres data layer.");
+  });
+}
+
+export async function updateLesson(input: {
+  lessonId: string;
+  slug: string;
+  title: string;
+  type: "video" | "article" | "quiz" | "resource";
+  durationMinutes: number;
+  isPreview: boolean;
+  body: string;
+  videoKey?: string;
+}) {
+  return withFallback(async () => {
+    const existingLesson = await db.query.lessons.findFirst({
+      where: eq(lessons.id, input.lessonId)
+    });
+    if (!existingLesson) {
+      throw new Error("Lesson not found.");
+    }
+
+    const slugConflict = await db.query.lessons.findFirst({
+      where: eq(lessons.slug, input.slug)
+    });
+    if (slugConflict && slugConflict.id !== input.lessonId) {
+      throw new Error("A lesson with this slug already exists.");
+    }
+
+    await db
+      .update(lessons)
+      .set({
+        slug: input.slug,
+        title: input.title,
+        type: input.type,
+        durationMinutes: input.durationMinutes,
+        isPreview: input.isPreview,
+        body: input.body,
+        videoKey: input.videoKey
+      })
+      .where(eq(lessons.id, input.lessonId));
+
+    const updated = await db.query.lessons.findFirst({
+      where: eq(lessons.id, input.lessonId)
+    });
+    if (!updated) {
+      throw new Error("Lesson update failed.");
+    }
+
+    return mapLesson(updated);
+  }, async () => {
+    throw new Error("Lesson editing requires the Postgres data layer.");
+  });
+}
+
+export async function moveModule(input: { moduleId: string; direction: "up" | "down" }) {
+  return withFallback(async () => {
+    const module = await db.query.modules.findFirst({
+      where: eq(modules.id, input.moduleId)
+    });
+    if (!module) {
+      throw new Error("Module not found.");
+    }
+
+    const siblings = await db.select().from(modules).where(eq(modules.courseId, module.courseId)).orderBy(asc(modules.order));
+    const currentIndex = siblings.findIndex((item) => item.id === input.moduleId);
+    const swapIndex = input.direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (currentIndex === -1 || swapIndex < 0 || swapIndex >= siblings.length) {
+      return mapModule(module);
+    }
+
+    const swapTarget = siblings[swapIndex];
+    await db.update(modules).set({ order: swapTarget.order }).where(eq(modules.id, module.id));
+    await db.update(modules).set({ order: module.order }).where(eq(modules.id, swapTarget.id));
+
+    const updated = await db.query.modules.findFirst({
+      where: eq(modules.id, module.id)
+    });
+    return mapModule(updated ?? module);
+  }, async () => {
+    throw new Error("Module reordering requires the Postgres data layer.");
+  });
+}
+
+export async function moveLesson(input: { lessonId: string; direction: "up" | "down" }) {
+  return withFallback(async () => {
+    const lesson = await db.query.lessons.findFirst({
+      where: eq(lessons.id, input.lessonId)
+    });
+    if (!lesson) {
+      throw new Error("Lesson not found.");
+    }
+
+    const siblings = await db.select().from(lessons).where(eq(lessons.moduleId, lesson.moduleId)).orderBy(asc(lessons.order));
+    const currentIndex = siblings.findIndex((item) => item.id === input.lessonId);
+    const swapIndex = input.direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (currentIndex === -1 || swapIndex < 0 || swapIndex >= siblings.length) {
+      return mapLesson(lesson);
+    }
+
+    const swapTarget = siblings[swapIndex];
+    await db.update(lessons).set({ order: swapTarget.order }).where(eq(lessons.id, lesson.id));
+    await db.update(lessons).set({ order: lesson.order }).where(eq(lessons.id, swapTarget.id));
+
+    const updated = await db.query.lessons.findFirst({
+      where: eq(lessons.id, lesson.id)
+    });
+    return mapLesson(updated ?? lesson);
+  }, async () => {
+    throw new Error("Lesson reordering requires the Postgres data layer.");
+  });
+}
+
+export async function createLessonAsset(input: {
+  lessonId: string;
+  label: string;
+  kind: "attachment" | "slide" | "project";
+  fileKey: string;
+}) {
+  return withFallback(async () => {
+    const lesson = await db.query.lessons.findFirst({
+      where: eq(lessons.id, input.lessonId)
+    });
+    if (!lesson) {
+      throw new Error("Lesson not found.");
+    }
+
+    const asset: typeof lessonAssets.$inferInsert = {
+      id: randomUUID(),
+      lessonId: input.lessonId,
+      label: input.label,
+      kind: input.kind,
+      fileKey: input.fileKey
+    };
+
+    await db.insert(lessonAssets).values(asset);
+    return mapAsset(asset as typeof lessonAssets.$inferSelect);
+  }, async () => {
+    throw new Error("Lesson assets require the Postgres data layer.");
+  });
+}
+
+export async function deleteLesson(input: { lessonId: string }) {
+  return withFallback(async () => {
+    const lesson = await db.query.lessons.findFirst({
+      where: eq(lessons.id, input.lessonId)
+    });
+    if (!lesson) {
+      throw new Error("Lesson not found.");
+    }
+
+    const [progressCount, noteCount, aiCount] = await Promise.all([
+      db.select().from(progressRecords).where(eq(progressRecords.lessonId, input.lessonId)),
+      db.select().from(notes).where(eq(notes.lessonId, input.lessonId)),
+      db.select().from(aiMessages).where(eq(aiMessages.lessonId, input.lessonId))
+    ]);
+
+    if (progressCount.length || noteCount.length || aiCount.length) {
+      throw new Error("This lesson already has learner activity and cannot be deleted.");
+    }
+
+    await db.delete(lessonAssets).where(eq(lessonAssets.lessonId, input.lessonId));
+    await db.delete(lessons).where(eq(lessons.id, input.lessonId));
+
+    const remainingLessons = await db
+      .select()
+      .from(lessons)
+      .where(eq(lessons.moduleId, lesson.moduleId))
+      .orderBy(asc(lessons.order));
+
+    for (let index = 0; index < remainingLessons.length; index += 1) {
+      const expectedOrder = index + 1;
+      if (remainingLessons[index]?.order !== expectedOrder) {
+        await db.update(lessons).set({ order: expectedOrder }).where(eq(lessons.id, remainingLessons[index]!.id));
+      }
+    }
+  }, async () => {
+    throw new Error("Lesson deletion requires the Postgres data layer.");
+  });
+}
+
+export async function deleteModule(input: { moduleId: string }) {
+  return withFallback(async () => {
+    const module = await db.query.modules.findFirst({
+      where: eq(modules.id, input.moduleId)
+    });
+    if (!module) {
+      throw new Error("Module not found.");
+    }
+
+    const childLessons = await db.select().from(lessons).where(eq(lessons.moduleId, input.moduleId));
+    if (childLessons.length) {
+      throw new Error("Delete the lessons in this module before deleting the module.");
+    }
+
+    await db.delete(modules).where(eq(modules.id, input.moduleId));
+
+    const remainingModules = await db
+      .select()
+      .from(modules)
+      .where(eq(modules.courseId, module.courseId))
+      .orderBy(asc(modules.order));
+
+    for (let index = 0; index < remainingModules.length; index += 1) {
+      const expectedOrder = index + 1;
+      if (remainingModules[index]?.order !== expectedOrder) {
+        await db.update(modules).set({ order: expectedOrder }).where(eq(modules.id, remainingModules[index]!.id));
+      }
+    }
+  }, async () => {
+    throw new Error("Module deletion requires the Postgres data layer.");
+  });
 }
 
 export async function listCategories() {
