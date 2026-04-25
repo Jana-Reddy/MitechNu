@@ -117,7 +117,7 @@ export default async function AdminPage({
                 {(() => {
                   const ITEMS_PER_PAGE = 10;
                   const currentPage = parseInt(query.paymentPage || "1", 10);
-                  const filteredOrders = overview.orders.filter((order) => {
+                  const filteredOrders = overview.orders.filter((order: any) => {
                     const status = order.payment?.status ?? order.status;
                     if (!query.paymentFilter || query.paymentFilter === "all") return true;
                     return status === query.paymentFilter;
@@ -130,7 +130,7 @@ export default async function AdminPage({
 
                   return (
                     <>
-                      {paginatedOrders.map((order) => (
+                      {paginatedOrders.map((order: any) => (
                         <div key={order.id} className="rounded-3xl border border-slate-200 p-5">
                           <div className="flex flex-wrap items-start justify-between gap-4">
                             <div>
@@ -218,7 +218,7 @@ export default async function AdminPage({
                   <input name="durationHours" type="number" placeholder="Duration (hours)" className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-950" />
                   <select name="categoryId" className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-slate-950">
                     <option value="">Select category</option>
-                    {categories.map((category) => (
+                    {categories.map((category: any) => (
                       <option key={category.id} value={category.id}>{category.name}</option>
                     ))}
                   </select>
@@ -239,7 +239,7 @@ export default async function AdminPage({
             <div className="rounded-[2rem] border border-slate-200 bg-white p-6">
               <h2 className="text-2xl font-bold text-slate-950">Courses</h2>
               <div className="mt-5 space-y-4">
-                {overview.courses.map((course) => (
+                {overview.courses.map((course: any) => (
                   <div key={course.id} className="rounded-2xl border border-slate-200 p-5">
                     <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
                       <div className="flex-1">
@@ -253,7 +253,7 @@ export default async function AdminPage({
                         <div className="mt-4">
                           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Tech Stack</p>
                           <div className="mt-2 flex flex-wrap gap-2">
-                            {course.tags?.map((tag) => (
+                            {course.tags?.map((tag: any) => (
                               <span key={tag} className="rounded-lg bg-slate-50 px-2.5 py-1 text-xs text-slate-600">{tag}</span>
                             ))}
                           </div>
@@ -304,7 +304,7 @@ export default async function AdminPage({
                           <input name="priceInr" type="number" defaultValue={course.priceInr} placeholder="Price (INR)" className="w-full rounded-2xl border border-slate-300 px-4 py-2 text-sm outline-none focus:border-slate-950" />
                           <input name="durationHours" type="number" defaultValue={course.durationHours} placeholder="Duration (hours)" className="w-full rounded-2xl border border-slate-300 px-4 py-2 text-sm outline-none focus:border-slate-950" />
                           <select name="categoryId" defaultValue={course.categoryId} className="w-full rounded-2xl border border-slate-300 px-4 py-2 text-sm outline-none focus:border-slate-950">
-                            {categories.map((category) => (
+                            {categories.map((category: any) => (
                               <option key={category.id} value={category.id}>{category.name}</option>
                             ))}
                           </select>
@@ -387,7 +387,7 @@ export default async function AdminPage({
             <div className="mt-8 rounded-2xl bg-slate-50 p-4">
               <h3 className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Coupons</h3>
               <div className="mt-3 space-y-2">
-                {overview.coupons.map((coupon) => (
+                {overview.coupons.map((coupon: any) => (
                   <div key={coupon.id} className="flex items-center justify-between text-sm text-slate-600">
                     <span>{coupon.code}</span>
                     <span>{coupon.percentageOff}% off</span>
