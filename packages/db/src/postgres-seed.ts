@@ -44,14 +44,6 @@ async function seedPostgres() {
     }))
   );
 
-  // Update existing course cover images only
-  for (const course of seedData.courses) {
-    await db.update(courses)
-      .set({
-        coverImage: course.coverImage
-      })
-      .where(eq(courses.id, course.id));
-  }
 
   await insertIfAny(modules, seedData.modules);
   await insertIfAny(lessons, seedData.lessons);
