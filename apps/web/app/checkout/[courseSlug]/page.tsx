@@ -26,7 +26,7 @@ export default async function CheckoutPage({
   }
 
   const orders = await listOrdersForUser(user.id);
-  const activeOrder = orders.find((order) => order.id === query.orderId) ?? orders.find((order) => order.course?.slug === courseSlug);
+  const activeOrder = orders.find((order: any) => order.id === query.orderId) ?? orders.find((order: any) => order.course?.slug === courseSlug);
   const paymentSettings = await getPaymentSettings();
   const paymentConfig = getResolvedPaymentConfig(paymentSettings, activeOrder?.amountInr ?? course.priceInr);
 
