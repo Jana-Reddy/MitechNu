@@ -885,7 +885,7 @@ export async function getAdminOverview() {
     ]);
 
     const mappedUsers = userRows.map(mapUser);
-    const mappedCourses = courseRows.map(mapCourse);
+    const mappedCourses = courseRows.map(mapCourse).filter((course) => !course.deletedAt);
 
     return {
       stats: {

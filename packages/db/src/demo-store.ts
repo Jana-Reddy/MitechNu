@@ -384,14 +384,15 @@ export async function getAiTutorUsage(userId: string, windowMinutes = 60) {
 
 export async function getAdminOverview() {
   const store = await readStore();
+  const activeCourses = store.courses.filter((course) => !course.deletedAt);
   return {
     stats: {
       learners: store.users.filter((user) => user.role === "learner").length,
-      courses: store.courses.length,
+      courses: activeCourses.length,
       pendingPayments: store.payments.filter((payment) => payment.status === "proof_submitted").length,
       revenueInr: store.orders.filter((order) => order.status === "approved").reduce((sum, order) => sum + order.amountInr, 0)
     },
-    courses: store.courses,
+    courses: activeCourses,
     orders: store.orders.map((order) => ({
       ...order,
       user: store.users.find((user) => user.id === order.userId),
