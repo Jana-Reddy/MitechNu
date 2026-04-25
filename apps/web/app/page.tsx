@@ -39,7 +39,7 @@ export default async function HomePage() {
               </Link>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              {outcomes.map((item) => (
+              {outcomes.map((item: any) => (
                 <div key={item} className="rounded-2xl border border-slate-200 bg-white/80 p-4 text-sm leading-6 text-slate-600">
                   {item}
                 </div>
@@ -52,12 +52,12 @@ export default async function HomePage() {
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-orange-300">Launch stack</p>
               <div className="grid gap-4">
                 {[
-                  "Next.js 15 + React 19 + TypeScript",
-                  "PostgreSQL-ready domain models with runtime demo persistence",
-                  "MinIO-compatible private media pipeline",
-                  "Ollama-ready AI tutor inside lessons",
-                  "Docker Compose stack for local and self-hosted deployment"
-                ].map((item) => (
+                  "Java 17+ with Spring Boot for enterprise applications",
+                  "Spring MVC, Spring Data JPA, and REST API development",
+                  "Spring Cloud for microservices architecture",
+                  "Service discovery with Eureka and API Gateways",
+                  "Distributed systems patterns and event-driven design"
+                ].map((item: any) => (
                   <div key={item} className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-6 text-slate-200">
                     {item}
                   </div>
@@ -70,13 +70,13 @@ export default async function HomePage() {
 
       <SectionTitle
         label="Featured"
-        title="Career-focused launch catalog"
-        description="Start with a platform-owned catalog that teaches practical skills, not just isolated syntax."
+        title="Featured Courses"
+        description="Practical courses to build real-world skills."
       />
 
       <SectionShell>
         <div className="grid gap-6 md:grid-cols-2">
-          {featuredCourses.map((course) => (
+          {featuredCourses.map((course: any) => (
             <CourseCard key={course.id} course={course} />
           ))}
         </div>

@@ -3,7 +3,7 @@ import Google from "next-auth/providers/google";
 import { getUserByEmail, upsertOAuthUser } from "@academy/db";
 
 export const authOptions: NextAuthOptions = {
-  secret: process.env.AUTH_SECRET,
+  secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
   session: {
     strategy: "jwt"
   },

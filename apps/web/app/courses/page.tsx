@@ -15,7 +15,7 @@ export default async function CoursesPage() {
       />
       <SectionShell>
         <div className="grid gap-6 md:grid-cols-2">
-          {courses.map((course) => (
+          {courses.map((course: any) => (
             <CourseCard key={course.id} course={course} />
           ))}
         </div>

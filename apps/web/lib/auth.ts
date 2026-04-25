@@ -6,6 +6,13 @@ import { getUserByEmail, getUserById } from "@academy/db";
 import { authOptions } from "../auth";
 
 const sessionCookieName = "academy_session";
+const sessionMaxAgeSeconds = 60 * 60 * 24 * 14;
+const nextAuthCookieNames = [
+  "next-auth.session-token",
+  "__Secure-next-auth.session-token",
+  "authjs.session-token",
+  "__Secure-authjs.session-token"
+];
 
 function sign(value: string) {
   return createHmac("sha256", env.sessionSecret).update(value).digest("base64url");
@@ -32,7 +39,15 @@ function decodeSession(token: string) {
     return null;
   }
 
-  const [userId] = payload.split(".");
+  const [userId, issuedAtRaw] = payload.split(".");
+  const issuedAt = Number(issuedAtRaw);
+  if (!userId || !Number.isFinite(issuedAt)) {
+    return null;
+  }
+  if (Date.now() - issuedAt > sessionMaxAgeSeconds * 1000) {
+    return null;
+  }
+
   return userId;
 }
 
@@ -41,15 +56,18 @@ export async function createSession(userId: string) {
   cookieStore.set(sessionCookieName, encodeSession(userId), {
     httpOnly: true,
     sameSite: "lax",
-    secure: false,
+    secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: 60 * 60 * 24 * 14
+    maxAge: sessionMaxAgeSeconds
   });
 }
 
 export async function clearSession() {
   const cookieStore = await cookies();
   cookieStore.delete(sessionCookieName);
+  for (const cookieName of nextAuthCookieNames) {
+    cookieStore.delete(cookieName);
+  }
 }
 
 export async function getCurrentUser() {
@@ -65,7 +83,15 @@ export async function getCurrentUser() {
     }
   }
 
-  const session = await getServerSession(authOptions);
+  let session = null;
+  try {
+    session = await getServerSession(authOptions);
+  } catch {
+    for (const cookieName of nextAuthCookieNames) {
+      cookieStore.delete(cookieName);
+    }
+    return null;
+  }
   if (!session?.user?.email) {
     return null;
   }

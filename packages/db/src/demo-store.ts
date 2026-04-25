@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { calculateCourseProgress, calculateDiscountedPrice, getFeaturedCourses } from "./domain";
 import { hashPassword, verifyPassword } from "./auth-utils";
 import { seedData } from "./seed";
-import type { AiChatMessage, Certificate, Course, DemoStore, NoteRecord, Order, PaymentStatus, User, UserRole } from "./types";
+import type { AiChatMessage, Certificate, Course, DemoStore, NoteRecord, Order, PaymentSettings, PaymentStatus, User, UserRole } from "./types";
 
 const storePath = join(process.cwd(), "runtime", "demo-store.json");
 
@@ -19,7 +19,11 @@ async function ensureStoreFile() {
 
 async function readStore(): Promise<DemoStore> {
   await ensureStoreFile();
-  return JSON.parse(await readFile(storePath, "utf8")) as DemoStore;
+  const store = JSON.parse(await readFile(storePath, "utf8")) as DemoStore;
+  return {
+    ...store,
+    paymentSettings: store.paymentSettings ?? []
+  };
 }
 
 async function writeStore(store: DemoStore) {
@@ -144,10 +148,25 @@ export async function getDashboardData(userId: string) {
     .filter((enrollment) => enrollment.userId === userId)
     .map((enrollment) => store.courses.find((course) => course.id === enrollment.courseId))
     .filter(Boolean)
-    .map((course) => ({
-      ...summarizeCourse(course!, store),
-      progress: calculateCourseProgress(store.modules, store.lessons, userProgress, course!.id)
-    }));
+    .map((course) => {
+      const lessonsForCourse = store.lessons.filter((lesson) =>
+        store.modules.some((module) => module.courseId === course!.id && module.id === lesson.moduleId)
+      );
+      const progressForCourse = userProgress.filter((item) => item.courseId === course!.id);
+      const firstIncomplete = lessonsForCourse.find((lesson) => !progressForCourse.find((item) => item.lessonId === lesson.id && item.completed));
+      const mostRecent = [...progressForCourse].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+      const resumeLesson = firstIncomplete ?? lessonsForCourse.find((lesson) => lesson.id === mostRecent?.lessonId) ?? lessonsForCourse[0];
+      const certificate = store.certificates.find((item) => item.userId === userId && item.courseId === course!.id);
+
+      return {
+        ...summarizeCourse(course!, store),
+        progress: calculateCourseProgress(store.modules, store.lessons, userProgress, course!.id),
+        completedLessons: progressForCourse.filter((item) => item.completed).length,
+        resumeLessonSlug: resumeLesson?.slug,
+        resumeLessonTitle: resumeLesson?.title,
+        certificateNumber: certificate?.certificateNumber
+      };
+    });
 
   return {
     activeCourses,
@@ -174,13 +193,24 @@ export async function getLearnerLessonView(userId: string, courseSlug: string, l
     return { course, lesson, blocked: true as const };
   }
 
+  const orderedLessons = store.lessons.filter((item) => moduleIds.includes(item.moduleId)).sort((a, b) => a.order - b.order);
+
   return {
     course,
     lesson,
-    lessons: store.lessons.filter((item) => moduleIds.includes(item.moduleId)).sort((a, b) => a.order - b.order),
+    lessons: orderedLessons,
     progress: store.progress.find((item) => item.userId === userId && item.lessonId === lesson.id),
     notes: store.notes.filter((item) => item.userId === userId && item.lessonId === lesson.id),
     assets: store.assets.filter((item) => item.lessonId === lesson.id),
+    aiMessages: store.aiMessages
+      .filter((item) => item.userId === userId && item.lessonId === lesson.id)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    progressPercent: calculateCourseProgress(store.modules, store.lessons, store.progress.filter((item) => item.userId === userId), course.id),
+    completedLessons: store.progress.filter((item) => item.userId === userId && item.courseId === course.id && item.completed).length,
+    totalLessons: orderedLessons.length,
+    previousLessonSlug: [...orderedLessons].reverse().find((item) => item.order < lesson.order)?.slug,
+    nextLessonSlug: orderedLessons.find((item) => item.order > lesson.order)?.slug,
+    certificate: store.certificates.find((item) => item.userId === userId && item.courseId === course.id),
     blocked: false as const
   };
 }
@@ -224,12 +254,13 @@ export async function createOrder(input: { userId: string; courseSlug: string; c
   return order;
 }
 
-export async function submitPaymentProof(input: { orderId: string; reference: string; notes?: string }) {
+export async function submitPaymentProof(input: { orderId: string; reference: string; notes?: string; screenshotUrl?: string }) {
   const store = await readStore();
   const existing = store.payments.find((item) => item.orderId === input.orderId);
   if (existing) {
     existing.reference = input.reference;
     existing.notes = input.notes;
+    existing.screenshotUrl = input.screenshotUrl;
     existing.status = "proof_submitted";
   } else {
     store.payments.push({
@@ -237,6 +268,7 @@ export async function submitPaymentProof(input: { orderId: string; reference: st
       orderId: input.orderId,
       reference: input.reference,
       notes: input.notes,
+      screenshotUrl: input.screenshotUrl,
       status: "proof_submitted"
     });
   }
@@ -315,22 +347,52 @@ export async function createNote(input: { userId: string; lessonId: string; cont
   return note;
 }
 
+export async function updateNote(input: { userId: string; noteId: string; content: string }) {
+  const store = await readStore();
+  const note = store.notes.find((item) => item.id === input.noteId && item.userId === input.userId);
+  if (!note) {
+    throw new Error("Note not found.");
+  }
+
+  note.content = input.content;
+  await writeStore(store);
+  return note;
+}
+
+export async function deleteNote(input: { userId: string; noteId: string }) {
+  const store = await readStore();
+  const index = store.notes.findIndex((item) => item.id === input.noteId && item.userId === input.userId);
+  if (index === -1) {
+    throw new Error("Note not found.");
+  }
+
+  store.notes.splice(index, 1);
+  await writeStore(store);
+}
+
 export async function appendAiMessage(message: AiChatMessage) {
   const store = await readStore();
   store.aiMessages.push(message);
   await writeStore(store);
 }
 
+export async function getAiTutorUsage(userId: string, windowMinutes = 60) {
+  const store = await readStore();
+  const cutoff = Date.now() - windowMinutes * 60 * 1000;
+  return store.aiMessages.filter((message) => message.userId === userId && message.role === "user" && new Date(message.createdAt).getTime() >= cutoff).length;
+}
+
 export async function getAdminOverview() {
   const store = await readStore();
+  const activeCourses = store.courses.filter((course) => !course.deletedAt);
   return {
     stats: {
       learners: store.users.filter((user) => user.role === "learner").length,
-      courses: store.courses.length,
+      courses: activeCourses.length,
       pendingPayments: store.payments.filter((payment) => payment.status === "proof_submitted").length,
       revenueInr: store.orders.filter((order) => order.status === "approved").reduce((sum, order) => sum + order.amountInr, 0)
     },
-    courses: store.courses,
+    courses: activeCourses,
     orders: store.orders.map((order) => ({
       ...order,
       user: store.users.find((user) => user.id === order.userId),
@@ -341,7 +403,33 @@ export async function getAdminOverview() {
   };
 }
 
-export async function createCourse(input: { title: string; slug: string; excerpt: string; description: string; priceInr: number; categoryId: string }) {
+export async function getPaymentSettings() {
+  const store = await readStore();
+  return store.paymentSettings[0] ?? null;
+}
+
+export async function upsertPaymentSettings(input: {
+  upiId?: string;
+  payeeName?: string;
+  qrCodeUrl?: string;
+  note?: string;
+}) {
+  const store = await readStore();
+  const settings: PaymentSettings = {
+    id: store.paymentSettings[0]?.id ?? "default",
+    upiId: input.upiId,
+    payeeName: input.payeeName,
+    qrCodeUrl: input.qrCodeUrl,
+    note: input.note,
+    updatedAt: new Date().toISOString()
+  };
+
+  store.paymentSettings = [settings];
+  await writeStore(store);
+  return settings;
+}
+
+export async function createCourse(input: { title: string; slug: string; excerpt: string; description: string; priceInr: number; categoryId: string; level?: string; durationHours?: number; tags?: string[]; pdfLink?: string }) {
   const store = await readStore();
   const course: Course = {
     id: randomUUID(),
@@ -351,19 +439,106 @@ export async function createCourse(input: { title: string; slug: string; excerpt
     excerpt: input.excerpt,
     description: input.description,
     coverImage: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80",
-    level: "beginner",
+    level: (input.level || "beginner") as "beginner" | "intermediate" | "advanced",
     priceInr: input.priceInr,
-    durationHours: 12,
+    durationHours: input.durationHours || 12,
     status: "draft",
     outcomes: ["Course outcomes to be refined"],
     prerequisites: ["No prerequisites yet"],
-    tags: ["new"],
+    tags: input.tags || ["new"],
     featured: false,
+    pdfLink: input.pdfLink,
     createdAt: new Date().toISOString()
   };
   store.courses.push(course);
   await writeStore(store);
   return course;
+}
+
+export async function updateCourse(input: {
+  courseId: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  description: string;
+  priceInr: number;
+  categoryId: string;
+  level?: string;
+  durationHours?: number;
+  tags?: string[];
+  coverImage?: string;
+  pdfLink?: string;
+}) {
+  const store = await readStore();
+  const courseIndex = store.courses.findIndex((c) => c.id === input.courseId);
+  if (courseIndex === -1) {
+    throw new Error("Course not found.");
+  }
+
+  const slugConflict = store.courses.find((c) => c.slug === input.slug && c.id !== input.courseId);
+  if (slugConflict) {
+    throw new Error("A course with this slug already exists.");
+  }
+
+  const category = store.categories.find((c) => c.id === input.categoryId);
+  if (!category) {
+    throw new Error("Category not found.");
+  }
+
+  store.courses[courseIndex] = {
+    ...store.courses[courseIndex],
+    title: input.title,
+    slug: input.slug,
+    excerpt: input.excerpt,
+    description: input.description,
+    priceInr: input.priceInr,
+    categoryId: input.categoryId,
+    ...(input.level && { level: input.level as "beginner" | "intermediate" | "advanced" }),
+    ...(input.durationHours !== undefined && { durationHours: input.durationHours }),
+    ...(input.tags && { tags: input.tags }),
+    ...(input.coverImage !== undefined && { coverImage: input.coverImage }),
+    ...(input.pdfLink !== undefined && { pdfLink: input.pdfLink })
+  };
+
+  await writeStore(store);
+  return store.courses[courseIndex];
+}
+
+export async function deleteCourse(input: { courseId: string; userId?: string }) {
+  const store = await readStore();
+  const courseIndex = store.courses.findIndex((c) => c.id === input.courseId);
+  if (courseIndex === -1) {
+    throw new Error("Course not found.");
+  }
+
+  const course = store.courses[courseIndex];
+
+  // Allow deleting unpublished courses even with enrollments
+  // Only block deletion if course is published and has enrollments
+  if (course.status === "published") {
+    const hasEnrollments = store.enrollments.some((e) => e.courseId === input.courseId);
+    if (hasEnrollments) {
+      throw new Error("Cannot delete published course with active enrollments.");
+    }
+  }
+
+  // Soft delete: set deletedAt timestamp instead of removing
+  store.courses[courseIndex].deletedAt = new Date().toISOString();
+
+  // Log audit entry
+  if (input.userId) {
+    store.auditLogs.push({
+      id: randomUUID(),
+      userId: input.userId,
+      action: "course_deleted",
+      entityType: "course",
+      entityId: input.courseId,
+      details: `Deleted course: ${course.title}`,
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  await writeStore(store);
 }
 
 export async function listCategories() {

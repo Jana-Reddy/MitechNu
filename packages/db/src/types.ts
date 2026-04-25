@@ -3,6 +3,7 @@ export type CourseStatus = "draft" | "published";
 export type LessonType = "video" | "article" | "quiz" | "resource";
 export type PaymentStatus = "awaiting_payment" | "proof_submitted" | "approved" | "rejected";
 export type OrderStatus = "pending" | "approved" | "rejected";
+export type AuditAction = "course_created" | "course_updated" | "course_deleted" | "course_published" | "course_unpublished" | "user_created" | "payment_approved" | "payment_rejected";
 
 export interface User {
   id: string;
@@ -38,6 +39,8 @@ export interface Course {
   prerequisites: string[];
   tags: string[];
   featured: boolean;
+  pdfLink?: string;
+  deletedAt?: string;
   createdAt: string;
 }
 
@@ -123,6 +126,15 @@ export interface Payment {
   reviewedAt?: string;
 }
 
+export interface PaymentSettings {
+  id: string;
+  upiId?: string;
+  payeeName?: string;
+  qrCodeUrl?: string;
+  note?: string;
+  updatedAt: string;
+}
+
 export interface Certificate {
   id: string;
   userId: string;
@@ -143,14 +155,16 @@ export interface AiChatMessage {
 
 export interface AuditLog {
   id: string;
-  actorUserId: string;
-  action: string;
-  targetType: string;
-  targetId: string;
+  userId: string;
+  action: AuditAction;
+  entityType: string;
+  entityId: string;
+  details?: string;
+  ipAddress?: string;
   createdAt: string;
 }
 
-export interface DemoStore {
+export interface Store {
   users: User[];
   categories: Category[];
   courses: Course[];
@@ -163,8 +177,10 @@ export interface DemoStore {
   coupons: Coupon[];
   orders: Order[];
   payments: Payment[];
+  paymentSettings: PaymentSettings[];
   certificates: Certificate[];
   aiMessages: AiChatMessage[];
   auditLogs: AuditLog[];
 }
 
+export type DemoStore = Store;

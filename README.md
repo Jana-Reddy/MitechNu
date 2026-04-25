@@ -16,6 +16,15 @@ Do not treat the current implementation as production-ready yet:
 - media delivery is scaffolded but not a full production streaming pipeline
 - authentication and infrastructure should be hardened further before public deployment
 
+## Recommended Public Stack
+
+For the fastest path to making this project public and reachable from anywhere:
+
+- Host the Next.js app on `Vercel`
+- Use `Neon` for managed PostgreSQL
+- Keep the current AI tutor fallback behavior until you are ready to host Ollama separately
+- Defer MinIO/private video infrastructure until after the first public launch
+
 ## What This Project Includes
 
 - Public landing page and course catalog
@@ -174,7 +183,84 @@ npm run build
 npm run start
 npm test
 npm run typecheck
+npm run db:generate
+npm run db:push
+npm run db:seed
 ```
+
+## Public Deployment Path: Vercel + Neon
+
+### 1. Create a Neon database
+
+1. Create a free Neon project.
+2. Copy the Postgres connection string.
+3. Save it as:
+   - `POSTGRES_URL`
+
+### 2. Push the schema and seed starter data
+
+After setting `POSTGRES_URL` locally, run:
+
+```bash
+npm run db:push
+npm run db:seed
+```
+
+This repository now includes:
+
+- `drizzle.config.ts`
+- complete PostgreSQL schema definitions in `packages/db/src/schema.ts`
+- a starter seed script in `packages/db/src/postgres-seed.ts`
+
+### 3. Deploy the app to Vercel
+
+1. Push this repository to GitHub.
+2. Import the repo into Vercel.
+3. Set the root project to the monorepo root.
+4. Use the default Next.js detection for `apps/web`.
+5. Add the required environment variables in Vercel.
+
+Recommended environment variables for the first public deployment:
+
+```env
+NEXTAUTH_URL=https://your-public-domain.vercel.app
+NEXTAUTH_SECRET=replace-with-a-long-random-secret
+AUTH_SECRET=replace-with-a-long-random-secret
+AUTH_GOOGLE_ID=your-google-client-id
+AUTH_GOOGLE_SECRET=your-google-client-secret
+
+NEXT_PUBLIC_APP_NAME=Mi.Tech.Nu
+NEXT_PUBLIC_APP_URL=https://your-public-domain.vercel.app
+
+ACADEMY_SESSION_SECRET=replace-with-a-long-random-secret
+ACADEMY_MEDIA_SECRET=replace-with-a-long-random-secret
+
+POSTGRES_URL=your-neon-connection-string
+REDIS_URL=redis://localhost:6379
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.1
+MINIO_ENDPOINT=http://localhost:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+MINIO_BUCKET=academy-media
+```
+
+### 4. Update Google OAuth before going public
+
+In Google Cloud Console, update the OAuth app with your public domain:
+
+- Authorized JavaScript origin:
+  `https://your-public-domain.vercel.app`
+- Authorized redirect URI:
+  `https://your-public-domain.vercel.app/api/auth/callback/google`
+
+### 5. Important current limitation
+
+The app still runs its live product flows through the demo store today.
+
+The new PostgreSQL/Neon setup added in this repository is the production foundation, but the application logic still needs to be switched from `packages/db/src/demo-store.ts` to database-backed queries before calling the project production-ready.
+
+That migration should be the next implementation milestone.
 
 ## Docker Compose Services
 

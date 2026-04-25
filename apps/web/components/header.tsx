@@ -25,7 +25,9 @@ export function Header({ user }: HeaderProps) {
         <nav className="hidden items-center gap-6 text-sm font-medium text-slate-600 md:flex">
           <Link href="/courses" className="hover:text-slate-950">Courses</Link>
           <Link href="/dashboard" className="hover:text-slate-950">Dashboard</Link>
-          <Link href="/admin" className="hover:text-slate-950">Admin</Link>
+          {user?.role === "admin" ? (
+            <Link href="/admin" className="hover:text-slate-950">Admin</Link>
+          ) : null}
         </nav>
 
         <div className="flex items-center gap-3">
