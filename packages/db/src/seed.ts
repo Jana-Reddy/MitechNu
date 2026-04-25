@@ -227,34 +227,9 @@ export const seedData: DemoStore = {
       fileKey: "resources/microservices/architecture.pdf"
     }
   ],
-  enrollments: [
-    {
-      id: "enrollment_1",
-      userId: "user_learner",
-      courseId: "course_java_spring",
-      createdAt: now
-    }
-  ],
-  progress: [
-    {
-      id: "progress_1",
-      userId: "user_learner",
-      courseId: "course_java_spring",
-      lessonId: "lesson_java_intro",
-      completed: true,
-      watchPositionSeconds: 1500,
-      updatedAt: now
-    }
-  ],
-  notes: [
-    {
-      id: "note_1",
-      userId: "user_learner",
-      lessonId: "lesson_java_intro",
-      content: "Java's strong typing and OOP principles make it ideal for enterprise applications.",
-      createdAt: now
-    }
-  ],
+  enrollments: [],
+  progress: [],
+  notes: [],
   coupons: [
     {
       id: "coupon_launch",
@@ -263,26 +238,8 @@ export const seedData: DemoStore = {
       active: true
     }
   ],
-  orders: [
-    {
-      id: "order_1",
-      userId: "user_learner",
-      courseId: "course_java_advanced",
-      amountInr: 4799,
-      couponCode: "LAUNCH20",
-      status: "pending",
-      createdAt: now
-    }
-  ],
-  payments: [
-    {
-      id: "payment_1",
-      orderId: "order_1",
-      reference: "UPI-REF-DEMO-1001",
-      notes: "Awaiting admin verification.",
-      status: "proof_submitted"
-    }
-  ],
+  orders: [],
+  payments: [],
   paymentSettings: [
     {
       id: "default",
