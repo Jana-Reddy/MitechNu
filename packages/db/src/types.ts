@@ -182,3 +182,5 @@ export interface Store {
   aiMessages: AiChatMessage[];
   auditLogs: AuditLog[];
 }
+
+export type DemoStore = Store;
