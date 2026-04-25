@@ -1,4 +1,5 @@
 import { db } from "./client";
+import { eq } from "drizzle-orm";
 import {
   aiMessages,
   auditLogs,
@@ -42,6 +43,26 @@ async function seedPostgres() {
       createdAt: new Date(course.createdAt)
     }))
   );
+
+  // Update existing courses with new data
+  for (const course of seedData.courses) {
+    await db.update(courses)
+      .set({
+        title: course.title,
+        excerpt: course.excerpt,
+        description: course.description,
+        coverImage: course.coverImage,
+        level: course.level,
+        priceInr: course.priceInr,
+        durationHours: course.durationHours,
+        status: course.status,
+        outcomes: course.outcomes,
+        prerequisites: course.prerequisites,
+        tags: course.tags,
+        featured: course.featured
+      })
+      .where(eq(courses.id, course.id));
+  }
 
   await insertIfAny(modules, seedData.modules);
   await insertIfAny(lessons, seedData.lessons);
