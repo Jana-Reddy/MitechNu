@@ -122,7 +122,7 @@ export async function submitPaymentAction(formData: FormData) {
   }
 
   const orders = await listOrdersForUser(user.id);
-  if (!orders.some((order) => order.id === orderId)) {
+  if (!orders.some((order: any) => order.id === orderId)) {
     redirect(`/checkout/${courseSlug}?error=invalid-order`);
   }
 
