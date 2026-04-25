@@ -331,6 +331,7 @@ export async function updateCourseAction(formData: FormData) {
   const durationHours = parseNonNegativeNumber(formData.get("durationHours"));
   const tagsRaw = cleanOptionalText(formData.get("tags"));
   const tags = tagsRaw ? tagsRaw.split(",").map(t => t.trim()).filter(t => t.length > 0) : undefined;
+  const coverImage = cleanOptionalText(formData.get("coverImage"));
   const pdfLink = cleanOptionalText(formData.get("pdfLink"));
 
   if (!courseId || !title || title.length > 120 || !slug || !isValidSlug(slug) || !excerpt || excerpt.length > 280 || !description || description.length > 4000 || !categoryId || priceInr === null) {
@@ -353,6 +354,7 @@ export async function updateCourseAction(formData: FormData) {
       level,
       durationHours: durationHours ?? undefined,
       tags,
+      coverImage,
       pdfLink
     });
   } catch (error) {

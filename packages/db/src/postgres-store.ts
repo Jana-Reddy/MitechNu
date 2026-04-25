@@ -1013,6 +1013,7 @@ export async function updateCourse(input: {
   level?: string;
   durationHours?: number;
   tags?: string[];
+  coverImage?: string;
   pdfLink?: string;
 }) {
   return withFallback(async () => {
@@ -1049,6 +1050,7 @@ export async function updateCourse(input: {
         ...(input.level && { level: input.level }),
         ...(input.durationHours && { durationHours: input.durationHours }),
         ...(input.tags && { tags: input.tags }),
+        ...(input.coverImage !== undefined && { coverImage: input.coverImage }),
         ...(input.pdfLink !== undefined && { pdfLink: input.pdfLink })
       })
       .where(eq(courses.id, input.courseId));

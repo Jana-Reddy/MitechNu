@@ -466,6 +466,7 @@ export async function updateCourse(input: {
   level?: string;
   durationHours?: number;
   tags?: string[];
+  coverImage?: string;
   pdfLink?: string;
 }) {
   const store = await readStore();
@@ -474,24 +475,33 @@ export async function updateCourse(input: {
     throw new Error("Course not found.");
   }
 
-  const course = store.courses[courseIndex];
-  const updated: Course = {
-    ...course,
+  const slugConflict = store.courses.find((c) => c.slug === input.slug && c.id !== input.courseId);
+  if (slugConflict) {
+    throw new Error("A course with this slug already exists.");
+  }
+
+  const category = store.categories.find((c) => c.id === input.categoryId);
+  if (!category) {
+    throw new Error("Category not found.");
+  }
+
+  store.courses[courseIndex] = {
+    ...store.courses[courseIndex],
     title: input.title,
     slug: input.slug,
     excerpt: input.excerpt,
     description: input.description,
     priceInr: input.priceInr,
     categoryId: input.categoryId,
-    level: (input.level ?? course.level) as "beginner" | "intermediate" | "advanced",
-    durationHours: input.durationHours ?? course.durationHours,
-    tags: input.tags ?? course.tags,
-    pdfLink: input.pdfLink
+    ...(input.level && { level: input.level as "beginner" | "intermediate" | "advanced" }),
+    ...(input.durationHours !== undefined && { durationHours: input.durationHours }),
+    ...(input.tags && { tags: input.tags }),
+    ...(input.coverImage !== undefined && { coverImage: input.coverImage }),
+    ...(input.pdfLink !== undefined && { pdfLink: input.pdfLink })
   };
 
-  store.courses[courseIndex] = updated;
   await writeStore(store);
-  return updated;
+  return store.courses[courseIndex];
 }
 
 export async function deleteCourse(input: { courseId: string; userId?: string }) {

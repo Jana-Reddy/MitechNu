@@ -313,6 +313,7 @@ export default async function AdminPage({
                           <input name="level" defaultValue={course.level} placeholder="Level" className="w-full rounded-2xl border border-slate-300 px-4 py-2 text-sm outline-none focus:border-slate-950" />
                           <input name="tags" defaultValue={course.tags?.join(", ")} placeholder="Tech stack (comma separated)" className="w-full rounded-2xl border border-slate-300 px-4 py-2 text-sm outline-none focus:border-slate-950" />
                         </div>
+                        <input name="coverImage" defaultValue={course.coverImage} placeholder="Cover image URL" className="w-full rounded-2xl border border-slate-300 px-4 py-2 text-sm outline-none focus:border-slate-950" />
                         <input name="pdfLink" defaultValue={course.pdfLink ?? ""} placeholder="Google Drive PDF link (optional)" className="w-full rounded-2xl border border-slate-300 px-4 py-2 text-sm outline-none focus:border-slate-950" />
                         <div className="flex justify-end">
                           <button className="rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">
