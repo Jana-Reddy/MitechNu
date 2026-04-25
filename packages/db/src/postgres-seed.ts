@@ -44,22 +44,11 @@ async function seedPostgres() {
     }))
   );
 
-  // Update existing courses with new data
+  // Update existing course cover images only
   for (const course of seedData.courses) {
     await db.update(courses)
       .set({
-        title: course.title,
-        excerpt: course.excerpt,
-        description: course.description,
-        coverImage: course.coverImage,
-        level: course.level,
-        priceInr: course.priceInr,
-        durationHours: course.durationHours,
-        status: course.status,
-        outcomes: course.outcomes,
-        prerequisites: course.prerequisites,
-        tags: course.tags,
-        featured: course.featured
+        coverImage: course.coverImage
       })
       .where(eq(courses.id, course.id));
   }
