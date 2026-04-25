@@ -182,7 +182,7 @@ export default async function LearnLessonPage({
             <div className="mt-6 rounded-[2rem] border border-slate-200 p-6">
               <h2 className="text-xl font-bold text-slate-950">Lesson resources</h2>
               <div className="mt-4 space-y-3">
-                {lessonView.assets.length ? lessonView.assets.map((asset) => (
+                {lessonView.assets.length ? lessonView.assets.map((asset: any) => (
                   <div key={asset.id} className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
                     <p className="font-semibold text-slate-900">{asset.label}</p>
                     <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">{asset.kind}</p>
@@ -200,7 +200,7 @@ export default async function LearnLessonPage({
           <div className="rounded-[2rem] border border-slate-200 bg-white p-6">
             <h2 className="text-xl font-bold text-slate-950">Curriculum</h2>
             <div className="mt-4 space-y-3">
-              {lessonView.lessons.map((lesson) => (
+              {lessonView.lessons.map((lesson: any) => (
                 <Link
                   key={lesson.id}
                   href={`/learn/${courseSlug}/${lesson.slug}`}
@@ -238,7 +238,7 @@ export default async function LearnLessonPage({
               </button>
             </form>
             <div className="mt-4 space-y-3">
-              {lessonView.aiMessages?.length ? lessonView.aiMessages.map((message) => (
+              {lessonView.aiMessages?.length ? lessonView.aiMessages.map((message: any) => (
                 <div key={message.id} className={`rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === "user" ? "bg-slate-100 text-slate-700" : "bg-orange-50 text-slate-700"}`}>
                   <p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{message.role === "user" ? "You" : "Tutor"}</p>
                   <p>{message.content}</p>
@@ -252,7 +252,7 @@ export default async function LearnLessonPage({
           <div className="rounded-[2rem] border border-slate-200 bg-white p-6">
             <h2 className="text-xl font-bold text-slate-950">Saved notes</h2>
             <div className="mt-4 space-y-4">
-              {lessonView.notes.map((note) => (
+              {lessonView.notes.map((note: any) => (
                 <div key={note.id} className="rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
                   <form action={updateNoteAction} className="space-y-3">
                     <input type="hidden" name="noteId" value={note.id} />

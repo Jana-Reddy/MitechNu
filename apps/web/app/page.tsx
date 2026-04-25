@@ -39,7 +39,7 @@ export default async function HomePage() {
               </Link>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              {outcomes.map((item) => (
+              {outcomes.map((item: any) => (
                 <div key={item} className="rounded-2xl border border-slate-200 bg-white/80 p-4 text-sm leading-6 text-slate-600">
                   {item}
                 </div>
@@ -57,7 +57,7 @@ export default async function HomePage() {
                   "Spring Cloud for microservices architecture",
                   "Service discovery with Eureka and API Gateways",
                   "Distributed systems patterns and event-driven design"
-                ].map((item) => (
+                ].map((item: any) => (
                   <div key={item} className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm leading-6 text-slate-200">
                     {item}
                   </div>
@@ -76,7 +76,7 @@ export default async function HomePage() {
 
       <SectionShell>
         <div className="grid gap-6 md:grid-cols-2">
-          {featuredCourses.map((course) => (
+          {featuredCourses.map((course: any) => (
             <CourseCard key={course.id} course={course} />
           ))}
         </div>

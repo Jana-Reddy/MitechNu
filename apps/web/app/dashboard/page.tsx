@@ -45,7 +45,7 @@ export default async function DashboardPage() {
             <div className="rounded-[2rem] border border-slate-200 bg-white p-6">
               <h2 className="text-2xl font-bold text-slate-950">Active learning</h2>
               <div className="mt-5 grid gap-4">
-                {dashboard.activeCourses.map((course) => (
+                {dashboard.activeCourses.map((course: any) => (
                   <div key={course.id} className="rounded-3xl border border-slate-200 p-5">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <div>
@@ -93,7 +93,7 @@ export default async function DashboardPage() {
             <div className="rounded-[2rem] border border-slate-200 bg-white p-6">
               <h2 className="text-2xl font-bold text-slate-950">Recent notes</h2>
               <div className="mt-4 space-y-4">
-                {dashboard.notes.map((note) => (
+                {dashboard.notes.map((note: any) => (
                   <div key={note.id} className="rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
                     {note.content}
                   </div>
@@ -109,7 +109,7 @@ export default async function DashboardPage() {
             <div className="rounded-[2rem] border border-slate-200 bg-white p-6">
               <h2 className="text-xl font-bold text-slate-950">Orders</h2>
               <div className="mt-4 space-y-4">
-                {orders.map((order) => (
+                {orders.map((order: any) => (
                   <div key={order.id} className="rounded-2xl border border-slate-200 p-4">
                     <p className="font-semibold text-slate-950">{order.course?.title}</p>
                     <p className="mt-1 text-sm text-slate-500">{formatInr(order.amountInr)} • {order.status}</p>
@@ -128,7 +128,7 @@ export default async function DashboardPage() {
             <div className="rounded-[2rem] border border-slate-200 bg-white p-6">
               <h2 className="text-xl font-bold text-slate-950">Certificates</h2>
               <div className="mt-4 space-y-4">
-                {certificates.length ? certificates.map((certificate) => (
+                {certificates.length ? certificates.map((certificate: any) => (
                   <div key={certificate.id} className="rounded-[1.75rem] border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50 p-5">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Completion certificate</p>
                     <p className="mt-3 font-semibold text-slate-950">{certificate.course?.title}</p>
