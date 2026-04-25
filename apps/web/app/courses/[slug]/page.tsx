@@ -15,7 +15,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ s
   }
 
   const dashboard = user ? await getDashboardData(user.id) : null;
-  const activeCourse = dashboard?.activeCourses.find((item) => item.id === course.id);
+  const activeCourse = dashboard?.activeCourses.find((item: any) => item.id === course.id);
 
   return (
     <div className="pb-20">
@@ -80,7 +80,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ s
               <div className="rounded-[2rem] border border-slate-200 bg-white p-6">
                 <h2 className="text-xl font-bold text-slate-950">What you will build</h2>
                 <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-                  {course.outcomes.map((item) => (
+                  {course.outcomes.map((item: any) => (
                     <li key={item}>• {item}</li>
                   ))}
                 </ul>
@@ -88,7 +88,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ s
               <div className="rounded-[2rem] border border-slate-200 bg-white p-6">
                 <h2 className="text-xl font-bold text-slate-950">Prerequisites</h2>
                 <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-                  {course.prerequisites.map((item) => (
+                  {course.prerequisites.map((item: any) => (
                     <li key={item}>• {item}</li>
                   ))}
                 </ul>
@@ -98,12 +98,12 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ s
             <div className="rounded-[2rem] border border-slate-200 bg-white p-6">
               <h2 className="text-xl font-bold text-slate-950">Curriculum</h2>
               <div className="mt-6 space-y-4">
-                {course.modules.map((module) => (
+                {course.modules.map((module: any) => (
                   <div key={module.id} className="rounded-3xl border border-slate-200 p-5">
                     <h3 className="text-lg font-bold text-slate-950">{module.title}</h3>
                     <p className="mt-2 text-sm text-slate-600">{module.description}</p>
                     <div className="mt-4 space-y-3">
-                      {module.lessons.map((lesson) => (
+                      {module.lessons.map((lesson: any) => (
                         <div key={lesson.id} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm">
                           <div>
                             <p className="font-semibold text-slate-900">{lesson.title}</p>
