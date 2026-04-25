@@ -1,9 +1,9 @@
 ﻿import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { Pill, SectionShell } from "@academy/ui";
 import { getCourseBySlug, getDashboardData } from "@academy/db";
 import { getCurrentUser } from "../../../lib/auth";
-import { createOrderAction } from "../../../lib/actions";
+import { createOrderAction, setCourseStatusAction } from "../../../lib/actions";
 import { formatInr } from "../../../lib/utils";
 
 export default async function CourseDetailPage({ params }: { params: Promise<{ slug: string }> }) {

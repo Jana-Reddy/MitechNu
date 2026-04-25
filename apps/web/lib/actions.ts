@@ -2,10 +2,13 @@
 
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
-import { appendAiMessage, authenticateUser, createCourse, createLesson, createLessonAsset, createModule, createNote, createOrder, createUser, deleteLesson, deleteModule, deleteNote, getAiTutorUsage, getCourseBySlug, getLessonContext, getLearnerLessonView, listOrdersForUser, moveLesson, moveModule, reviewPayment, setCourseStatus, submitPaymentProof, updateCourse, updateLesson, updateModule, updateNote, upsertPaymentSettings, upsertProgress } from "@academy/db";
+import { appendAiMessage, authenticateUser, createCourse, createLesson, createLessonAsset, createModule, createNote, createOrder, createUser, deleteCourse, deleteLesson, deleteModule, deleteNote, getAiTutorUsage, getCourseBySlug, getLessonContext, getLearnerLessonView, listOrdersForUser, moveLesson, moveModule, reviewPayment, setCourseStatus, submitPaymentProof, updateCourse, updateLesson, updateModule, updateNote, upsertPaymentSettings, upsertProgress } from "@academy/db";
 import { answerLessonQuestion } from "@academy/ai";
 import { clearSession, createSession, getCurrentUser } from "./auth";
-import { cleanOptionalText, cleanText, isValidEmail, isValidSlug, normalizeEmail, normalizeSlug, parseNonNegativeNumber, parsePositiveNumber } from "./validation";
+import { cleanOptionalText, cleanText, isValidCourseId, isValidEmail, isValidGoogleDriveUrl, isValidSlug, isValidUpiId, normalizeEmail, normalizeSlug, parseNonNegativeNumber, parsePositiveNumber, sanitizeHtml } from "./validation";
+import { revalidatePath } from "next/cache";
+import { checkRateLimit } from "./rate-limit";
+import { logError, logInfo, logWarn } from "./error-logger";
 
 export async function loginAction(formData: FormData) {
   const email = normalizeEmail(String(formData.get("email") ?? ""));
@@ -13,8 +16,17 @@ export async function loginAction(formData: FormData) {
   if (!isValidEmail(email) || password.length < 6) {
     redirect("/login?error=invalid");
   }
+
+  // Rate limiting: 5 login attempts per minute per email
+  const rateLimitResult = checkRateLimit(`login:${email}`, 5, 60000);
+  if (!rateLimitResult.success) {
+    logWarn("Rate limit exceeded for login", { email });
+    redirect("/login?error=rate-limited");
+  }
+
   const user = await authenticateUser(email, password);
   if (!user) {
+    logWarn("Failed login attempt", { email });
     redirect("/login?error=invalid");
   }
   await createSession(user.id);
@@ -25,13 +37,19 @@ export async function signupAction(formData: FormData) {
   const name = cleanText(formData.get("name"));
   const email = normalizeEmail(String(formData.get("email") ?? ""));
   const password = String(formData.get("password") ?? "");
-  if (name.length < 2 || name.length > 80 || !isValidEmail(email) || password.length < 8) {
+  if (!name || name.length > 80 || !isValidEmail(email) || password.length < 6) {
     redirect("/signup?error=invalid");
+  }
+
+  // Rate limiting: 3 signup attempts per minute per email
+  const rateLimitResult = checkRateLimit(`signup:${email}`, 3, 60000);
+  if (!rateLimitResult.success) {
+    redirect("/signup?error=rate-limited");
   }
 
   let user;
   try {
-    user = await createUser({ name, email, password });
+    user = await createUser({ name, email, password, role: "learner" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message.includes("already exists")) {
@@ -124,41 +142,18 @@ export async function updatePaymentSettingsAction(formData: FormData) {
   const qrCodeFile = formData.get("qrCodeFile");
   const note = cleanOptionalText(formData.get("note"));
 
-  if ((upiId && upiId.length > 120) || (payeeName && payeeName.length > 120) || (qrCodeUrlInput && qrCodeUrlInput.length > 20000) || (note && note.length > 400)) {
+  if (!upiId || !isValidUpiId(upiId) || !payeeName || payeeName.length > 100) {
     redirect("/admin?error=invalid-payment-settings");
   }
 
-  let qrCodeUrl = qrCodeUrlInput;
-
-  if (qrCodeFile instanceof File && qrCodeFile.size > 0) {
-    if (qrCodeFile.size > 1024 * 1024) {
-      redirect("/admin?error=invalid-payment-settings");
-    }
-    if (!["image/png", "image/jpeg", "image/webp", "image/svg+xml"].includes(qrCodeFile.type)) {
-      redirect("/admin?error=invalid-payment-settings");
-    }
-
-    const buffer = Buffer.from(await qrCodeFile.arrayBuffer());
-    qrCodeUrl = `data:${qrCodeFile.type};base64,${buffer.toString("base64")}`;
-  }
-
-  if (qrCodeUrl && !qrCodeUrl.startsWith("data:")) {
-    try {
-      const parsed = new URL(qrCodeUrl);
-      if (!["http:", "https:"].includes(parsed.protocol)) {
-        redirect("/admin?error=invalid-payment-settings");
-      }
-    } catch {
-      redirect("/admin?error=invalid-payment-settings");
-    }
-  }
+  const qrCodeUrl = qrCodeUrlInput;
 
   try {
     await upsertPaymentSettings({
       upiId,
-      payeeName,
-      qrCodeUrl,
-      note
+      payeeName: payeeName ?? "",
+      qrCodeUrl: qrCodeUrl ?? "",
+      note: note ?? ""
     });
   } catch {
     redirect("/admin?error=payment-settings");
@@ -177,7 +172,13 @@ export async function approvePaymentAction(formData: FormData) {
   if (!orderId || (decision !== "approved" && decision !== "rejected")) {
     redirect("/admin?error=invalid-review");
   }
-  await reviewPayment({ orderId, reviewerUserId: user.id, decision });
+  try {
+    await reviewPayment({ orderId, reviewerUserId: user.id, decision });
+    logInfo("Payment reviewed", { orderId, decision, reviewerUserId: user.id }, user.id);
+  } catch (error) {
+    logError(error, { action: "approvePayment", orderId, decision }, user.id);
+    redirect("/admin?error=review-failed");
+  }
   redirect("/admin?reviewed=1");
 }
 
@@ -191,7 +192,7 @@ export async function updateProgressAction(formData: FormData) {
   const watchPositionSeconds = parseNonNegativeNumber(formData.get("watchPositionSeconds"));
   const completed = formData.get("completed") === "true";
   const returnTo = String(formData.get("returnTo") ?? "/dashboard");
-  if (!courseId || !lessonId || watchPositionSeconds === null || !returnTo.startsWith("/")) {
+  if (!courseId || !isValidCourseId(courseId) || !lessonId || !isValidCourseId(lessonId) || watchPositionSeconds === null || !returnTo.startsWith("/")) {
     redirect("/dashboard?error=invalid-progress");
   }
   await upsertProgress({
@@ -274,9 +275,18 @@ export async function createCourseAction(formData: FormData) {
   const description = cleanText(formData.get("description"));
   const priceInr = parsePositiveNumber(formData.get("priceInr"));
   const categoryId = cleanText(formData.get("categoryId"));
+  const level = cleanOptionalText(formData.get("level"));
+  const durationHours = parseNonNegativeNumber(formData.get("durationHours"));
+  const tagsRaw = cleanOptionalText(formData.get("tags"));
+  const tags = tagsRaw ? tagsRaw.split(",").map(t => t.trim()).filter(t => t.length > 0) : undefined;
+  const pdfLink = cleanOptionalText(formData.get("pdfLink"));
 
   if (!title || title.length > 120 || !slug || !isValidSlug(slug) || !excerpt || excerpt.length > 280 || !description || description.length > 4000 || !categoryId || priceInr === null) {
     redirect("/admin?error=invalid-course");
+  }
+
+  if (!isValidGoogleDriveUrl(pdfLink ?? "")) {
+    redirect("/admin?error=invalid-pdf-link");
   }
 
   try {
@@ -286,9 +296,14 @@ export async function createCourseAction(formData: FormData) {
       excerpt,
       description,
       priceInr,
-      categoryId
+      categoryId,
+      level,
+      durationHours: durationHours ?? undefined,
+      tags,
+      pdfLink
     });
   } catch (error) {
+    logError(error, { action: "createCourse", title, slug }, user.id);
     const message = error instanceof Error ? error.message : "";
     if (message.includes("slug")) {
       redirect("/admin?error=duplicate-slug");
@@ -312,9 +327,18 @@ export async function updateCourseAction(formData: FormData) {
   const description = cleanText(formData.get("description"));
   const priceInr = parsePositiveNumber(formData.get("priceInr"));
   const categoryId = cleanText(formData.get("categoryId"));
+  const level = cleanOptionalText(formData.get("level"));
+  const durationHours = parseNonNegativeNumber(formData.get("durationHours"));
+  const tagsRaw = cleanOptionalText(formData.get("tags"));
+  const tags = tagsRaw ? tagsRaw.split(",").map(t => t.trim()).filter(t => t.length > 0) : undefined;
+  const pdfLink = cleanOptionalText(formData.get("pdfLink"));
 
   if (!courseId || !title || title.length > 120 || !slug || !isValidSlug(slug) || !excerpt || excerpt.length > 280 || !description || description.length > 4000 || !categoryId || priceInr === null) {
     redirect("/admin?error=invalid-course-edit");
+  }
+
+  if (!isValidGoogleDriveUrl(pdfLink ?? "")) {
+    redirect("/admin?error=invalid-pdf-link");
   }
 
   try {
@@ -325,9 +349,14 @@ export async function updateCourseAction(formData: FormData) {
       excerpt,
       description,
       priceInr,
-      categoryId
+      categoryId,
+      level,
+      durationHours: durationHours ?? undefined,
+      tags,
+      pdfLink
     });
   } catch (error) {
+    logError(error, { action: "updateCourse", courseId, title, slug }, user.id);
     const message = error instanceof Error ? error.message : "";
     if (message.includes("slug")) {
       redirect("/admin?error=duplicate-slug");
@@ -360,6 +389,34 @@ export async function setCourseStatusAction(formData: FormData) {
   }
 
   redirect(`/admin?courseStatus=${status}`);
+}
+
+export async function deleteCourseAction(formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "admin") {
+    redirect("/login");
+  }
+
+  const courseId = cleanText(formData.get("courseId"));
+  if (!courseId) {
+    redirect("/admin?error=invalid-course-delete");
+  }
+
+  try {
+    await deleteCourse({ courseId, userId: user.id });
+  } catch (error) {
+    logError(error, { action: "deleteCourse", courseId }, user.id);
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("enrollments")) {
+      redirect("/admin?error=course-has-enrollments");
+    }
+    if (message.includes("not found")) {
+      redirect("/admin?error=course-not-found");
+    }
+    redirect("/admin?error=course-delete");
+  }
+
+  redirect("/admin?courseDeleted=1");
 }
 
 export async function createModuleAction(formData: FormData) {

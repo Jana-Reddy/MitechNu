@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 import { db } from "./client";
 import {
   aiMessages,
+  auditLogs,
   categories,
   certificates,
   coupons,
@@ -20,6 +21,8 @@ import {
 } from "./schema";
 import type {
   AiChatMessage,
+  AuditAction,
+  AuditLog,
   Category,
   Certificate,
   Course,
@@ -66,6 +69,8 @@ function mapCourse(row: typeof courses.$inferSelect): Course {
   return {
     ...row,
     level: row.level as Course["level"],
+    pdfLink: row.pdfLink ?? undefined,
+    deletedAt: row.deletedAt ? toIsoString(row.deletedAt) : undefined,
     createdAt: toIsoString(row.createdAt) ?? new Date(0).toISOString()
   };
 }
@@ -671,8 +676,12 @@ export async function reviewPayment(input: { orderId: string; reviewerUserId: st
       db.query.orders.findFirst({ where: eq(orders.id, input.orderId) })
     ]);
 
-    if (!payment || !order) {
-      throw new Error("Order or payment not found.");
+    if (!order) {
+      throw new Error("Order not found.");
+    }
+
+    if (!payment) {
+      throw new Error("Payment proof not submitted yet. Cannot review.");
     }
 
     await db
@@ -952,7 +961,7 @@ export async function upsertPaymentSettings(input: {
   });
 }
 
-export async function createCourse(input: { title: string; slug: string; excerpt: string; description: string; priceInr: number; categoryId: string }) {
+export async function createCourse(input: { title: string; slug: string; excerpt: string; description: string; priceInr: number; categoryId: string; level?: string; durationHours?: number; tags?: string[]; pdfLink?: string }) {
   return withFallback(async () => {
     const existing = await db.query.courses.findFirst({
       where: eq(courses.slug, input.slug)
@@ -976,13 +985,14 @@ export async function createCourse(input: { title: string; slug: string; excerpt
       excerpt: input.excerpt,
       description: input.description,
       coverImage: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80",
-      level: "beginner",
+      level: input.level || "beginner",
       priceInr: input.priceInr,
-      durationHours: 12,
+      durationHours: input.durationHours || 12,
       status: "draft",
       outcomes: ["Course outcomes to be refined"],
       prerequisites: ["No prerequisites yet"],
-      tags: ["new"],
+      tags: input.tags || ["new"],
+      pdfLink: input.pdfLink,
       featured: false,
       createdAt: new Date()
     };
@@ -1000,6 +1010,10 @@ export async function updateCourse(input: {
   description: string;
   priceInr: number;
   categoryId: string;
+  level?: string;
+  durationHours?: number;
+  tags?: string[];
+  pdfLink?: string;
 }) {
   return withFallback(async () => {
     const existingCourse = await db.query.courses.findFirst({
@@ -1031,7 +1045,11 @@ export async function updateCourse(input: {
         excerpt: input.excerpt,
         description: input.description,
         priceInr: input.priceInr,
-        categoryId: input.categoryId
+        categoryId: input.categoryId,
+        ...(input.level && { level: input.level }),
+        ...(input.durationHours && { durationHours: input.durationHours }),
+        ...(input.tags && { tags: input.tags }),
+        ...(input.pdfLink !== undefined && { pdfLink: input.pdfLink })
       })
       .where(eq(courses.id, input.courseId));
 
@@ -1073,8 +1091,49 @@ export async function setCourseStatus(input: { courseId: string; status: "draft"
 
     return mapCourse(updatedCourse);
   }, async () => {
-    throw new Error("Course publishing requires the Postgres data layer.");
+    throw new Error("Course status change requires the Postgres data layer.");
   });
+}
+
+export async function deleteCourse(input: { courseId: string; userId?: string }) {
+  return withFallback(async () => {
+    const existingCourse = await db.query.courses.findFirst({
+      where: eq(courses.id, input.courseId)
+    });
+    if (!existingCourse) {
+      throw new Error("Course not found.");
+    }
+
+    // Allow deleting unpublished courses even with enrollments
+    // Only block deletion if course is published and has enrollments
+    if (existingCourse.status === "published") {
+      const courseEnrollments = await db.query.enrollments.findMany({
+        where: eq(enrollments.courseId, input.courseId)
+      });
+      if (courseEnrollments.length > 0) {
+        throw new Error("Cannot delete published course with active enrollments.");
+      }
+    }
+
+    // Soft delete: set deletedAt timestamp instead of hard delete
+    await db
+      .update(courses)
+      .set({ deletedAt: new Date() })
+      .where(eq(courses.id, input.courseId));
+
+    // Log audit entry
+    if (input.userId) {
+      await db.insert(auditLogs).values({
+        id: randomUUID(),
+        userId: input.userId,
+        action: "course_deleted",
+        entityType: "course",
+        entityId: input.courseId,
+        details: `Deleted course: ${existingCourse.title}`,
+        createdAt: new Date()
+      });
+    }
+  }, async () => demoStore.deleteCourse(input));
 }
 
 export async function createModule(input: { courseId: string; title: string; description: string }) {

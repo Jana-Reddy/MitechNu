@@ -26,150 +26,212 @@ export const seedData: DemoStore = {
   ],
   categories: [
     {
-      id: "cat_web",
-      name: "Web Development",
-      slug: "web-development",
-      description: "Frontend, backend, APIs, and deployment."
+      id: "cat_programming",
+      name: "Programming",
+      slug: "programming",
+      description: "Learn programming fundamentals and languages."
     },
     {
-      id: "cat_data",
-      name: "Data & AI",
-      slug: "data-ai",
-      description: "Machine learning, data engineering, and AI tooling."
+      id: "cat_tools",
+      name: "Tools",
+      slug: "tools",
+      description: "Development tools, frameworks, and utilities."
+    },
+    {
+      id: "cat_sql",
+      name: "SQL",
+      slug: "sql",
+      description: "Database management and SQL queries."
+    },
+    {
+      id: "cat_frontend",
+      name: "Frontend",
+      slug: "frontend",
+      description: "User interface development and frontend technologies."
+    },
+    {
+      id: "cat_backend",
+      name: "Backend",
+      slug: "backend",
+      description: "Server-side development and APIs."
     }
   ],
   courses: [
     {
-      id: "course_nextjs",
-      categoryId: "cat_web",
-      title: "Job-Ready Full Stack with Next.js",
-      slug: "job-ready-full-stack-nextjs",
-      excerpt: "Build modern full-stack products with React, Next.js, APIs, auth, and deployment.",
-      description: "A guided path from fundamentals to production-ready full-stack delivery with modules on product thinking, backend integration, testing, and deployment.",
-      coverImage: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80",
+      id: "course_java_spring",
+      categoryId: "cat_backend",
+      title: "Java Spring Boot Mastery",
+      slug: "java-spring-boot-mastery",
+      excerpt: "Build enterprise applications with Java 17+, Spring Boot, REST APIs, and PostgreSQL.",
+      description: "A comprehensive path from Java fundamentals to production-ready Spring Boot applications with modules on dependency injection, data access, security, and deployment.",
+      coverImage: "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1200&q=80",
       level: "beginner",
       priceInr: 4999,
-      durationHours: 28,
+      durationHours: 32,
       status: "published",
       outcomes: [
-        "Build production-grade Next.js applications",
-        "Design APIs and data models with confidence",
-        "Ship authentication, payments, and admin tooling"
+        "Build production-grade Spring Boot applications",
+        "Design RESTful APIs and JPA data models",
+        "Implement security, testing, and deployment"
       ],
-      prerequisites: ["Comfort using a browser", "Basic HTML/CSS familiarity"],
-      tags: ["nextjs", "react", "typescript", "postgres", "career"],
+      prerequisites: ["Basic programming knowledge", "Understanding of object-oriented concepts"],
+      tags: ["java", "spring", "springboot", "postgres", "enterprise"],
       featured: true,
       createdAt: now
     },
     {
-      id: "course_python",
-      categoryId: "cat_data",
-      title: "Python for Data and AI Builders",
-      slug: "python-for-data-ai-builders",
-      excerpt: "Learn Python, notebooks, APIs, and model workflows for practical AI projects.",
-      description: "Start with Python basics and grow into data analysis, AI tooling, and project delivery with practical labs and capstones.",
-      coverImage: "https://images.unsplash.com/photo-1526379095098-d400fd0bf935?auto=format&fit=crop&w=1200&q=80",
-      level: "beginner",
-      priceInr: 3999,
-      durationHours: 24,
+      id: "course_java_advanced",
+      categoryId: "cat_backend",
+      title: "Advanced Java & Microservices",
+      slug: "advanced-java-microservices",
+      excerpt: "Master microservices architecture, Spring Cloud, distributed systems, and performance tuning.",
+      description: "Take your Java skills to the next level with microservices patterns, event-driven architecture, containerization, and cloud-native deployment strategies.",
+      coverImage: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80",
+      level: "intermediate",
+      priceInr: 5999,
+      durationHours: 40,
       status: "published",
       outcomes: [
-        "Write clean Python scripts and packages",
-        "Analyze data with modern tools",
-        "Integrate LLM workflows into useful apps"
+        "Design and implement microservices architecture",
+        "Use Spring Cloud for distributed systems",
+        "Deploy Java applications with Docker and Kubernetes"
       ],
-      prerequisites: ["No prior coding experience required"],
-      tags: ["python", "data", "ai", "automation"],
+      prerequisites: ["Java Spring Boot experience", "Understanding of REST APIs"],
+      tags: ["java", "microservices", "springcloud", "kubernetes", "architecture"],
       featured: true,
       createdAt: now
     }
   ],
   modules: [
     {
-      id: "mod_next_1",
-      courseId: "course_nextjs",
-      title: "Foundations",
-      description: "Set up tools, understand the web platform, and build your first Next.js screens.",
+      id: "mod_java_1",
+      courseId: "course_java_spring",
+      title: "Java Fundamentals",
+      description: "Master Java syntax, OOP concepts, and core libraries.",
       order: 1
     },
     {
-      id: "mod_next_2",
-      courseId: "course_nextjs",
-      title: "Backend and Delivery",
-      description: "Add data, auth, payments, and deployment workflows.",
+      id: "mod_java_2",
+      courseId: "course_java_spring",
+      title: "Spring Boot Essentials",
+      description: "Build REST APIs with Spring Boot, Spring MVC, and Spring Data JPA.",
       order: 2
     },
     {
-      id: "mod_py_1",
-      courseId: "course_python",
-      title: "Python Fundamentals",
-      description: "Variables, control flow, functions, and project structure.",
+      id: "mod_java_3",
+      courseId: "course_java_spring",
+      title: "Data Access & Security",
+      description: "Implement JPA repositories, database operations, and Spring Security.",
+      order: 3
+    },
+    {
+      id: "mod_micro_1",
+      courseId: "course_java_advanced",
+      title: "Microservices Patterns",
+      description: "Learn microservices architecture, service discovery, and API gateways.",
       order: 1
+    },
+    {
+      id: "mod_micro_2",
+      courseId: "course_java_advanced",
+      title: "Spring Cloud & Distributed Systems",
+      description: "Implement Spring Cloud components for distributed applications.",
+      order: 2
     }
   ],
   lessons: [
     {
-      id: "lesson_next_intro",
-      moduleId: "mod_next_1",
-      slug: "nextjs-intro",
-      title: "Why Full Stack Product Builders Win",
+      id: "lesson_java_intro",
+      moduleId: "mod_java_1",
+      slug: "java-introduction",
+      title: "Introduction to Java Programming",
       type: "video",
       order: 1,
-      durationMinutes: 18,
+      durationMinutes: 25,
       isPreview: true,
-      videoKey: "videos/nextjs/intro/index.m3u8",
-      body: "This lesson frames the course around outcomes: shipping products, understanding the user journey, and connecting frontend decisions to business results."
+      videoKey: "videos/java/intro/index.m3u8",
+      body: "This lesson introduces Java programming, its ecosystem, and why it's the preferred choice for enterprise applications."
     },
     {
-      id: "lesson_next_routes",
-      moduleId: "mod_next_1",
-      slug: "app-router-foundations",
-      title: "App Router Foundations",
+      id: "lesson_java_oop",
+      moduleId: "mod_java_1",
+      slug: "java-oop-concepts",
+      title: "Object-Oriented Programming in Java",
       type: "article",
       order: 2,
-      durationMinutes: 22,
+      durationMinutes: 30,
       isPreview: false,
-      body: "Learn layouts, nested routes, server components, and how to keep data fetching close to the UI that needs it."
+      body: "Deep dive into OOP principles: encapsulation, inheritance, polymorphism, and abstraction with practical Java examples."
     },
     {
-      id: "lesson_next_ship",
-      moduleId: "mod_next_2",
-      slug: "shipping-your-first-product",
-      title: "Shipping Your First Product",
+      id: "lesson_spring_boot",
+      moduleId: "mod_java_2",
+      slug: "spring-boot-fundamentals",
+      title: "Spring Boot Fundamentals",
       type: "video",
       order: 1,
-      durationMinutes: 26,
+      durationMinutes: 35,
       isPreview: false,
-      videoKey: "videos/nextjs/shipping/index.m3u8",
-      body: "We bring together auth, storage, background jobs, and production deployment practices to launch an end-to-end product."
+      videoKey: "videos/spring/boot-fundamentals/index.m3u8",
+      body: "Learn how to set up a Spring Boot project, understand auto-configuration, and create your first REST endpoint."
     },
     {
-      id: "lesson_py_intro",
-      moduleId: "mod_py_1",
-      slug: "python-and-ai-overview",
-      title: "Python and AI Overview",
+      id: "lesson_spring_data",
+      moduleId: "mod_java_3",
+      slug: "spring-data-jpa",
+      title: "Spring Data JPA and Database Operations",
       type: "video",
       order: 1,
-      durationMinutes: 20,
+      durationMinutes: 40,
+      isPreview: false,
+      videoKey: "videos/spring/data-jpa/index.m3u8",
+      body: "Master JPA repositories, entity relationships, and database transactions with Spring Data."
+    },
+    {
+      id: "lesson_micro_intro",
+      moduleId: "mod_micro_1",
+      slug: "microservices-intro",
+      title: "Introduction to Microservices Architecture",
+      type: "video",
+      order: 1,
+      durationMinutes: 30,
       isPreview: true,
-      videoKey: "videos/python/overview/index.m3u8",
-      body: "See how Python fits into automation, data workflows, APIs, and modern AI product development."
+      videoKey: "videos/microservices/intro/index.m3u8",
+      body: "Understand the microservices architecture pattern, its benefits, and when to use it over monolithic applications."
+    },
+    {
+      id: "lesson_spring_cloud",
+      moduleId: "mod_micro_2",
+      slug: "spring-cloud-components",
+      title: "Spring Cloud for Distributed Systems",
+      type: "article",
+      order: 1,
+      durationMinutes: 45,
+      isPreview: false,
+      body: "Learn Spring Cloud components: Config Server, Service Discovery (Eureka), API Gateway, and Circuit Breakers."
     }
   ],
   assets: [
     {
-      id: "asset_next_project",
-      lessonId: "lesson_next_ship",
-      label: "Starter project repository guide",
+      id: "asset_java_starter",
+      lessonId: "lesson_spring_boot",
+      label: "Spring Boot starter project template",
       kind: "project",
-      fileKey: "resources/nextjs/starter-guide.pdf"
+      fileKey: "resources/java/spring-starter.zip"
+    },
+    {
+      id: "asset_micro_arch",
+      lessonId: "lesson_micro_intro",
+      label: "Microservices architecture diagrams",
+      kind: "slide",
+      fileKey: "resources/microservices/architecture.pdf"
     }
   ],
   enrollments: [
     {
       id: "enrollment_1",
       userId: "user_learner",
-      courseId: "course_nextjs",
+      courseId: "course_java_spring",
       createdAt: now
     }
   ],
@@ -177,10 +239,10 @@ export const seedData: DemoStore = {
     {
       id: "progress_1",
       userId: "user_learner",
-      courseId: "course_nextjs",
-      lessonId: "lesson_next_intro",
+      courseId: "course_java_spring",
+      lessonId: "lesson_java_intro",
       completed: true,
-      watchPositionSeconds: 1080,
+      watchPositionSeconds: 1500,
       updatedAt: now
     }
   ],
@@ -188,8 +250,8 @@ export const seedData: DemoStore = {
     {
       id: "note_1",
       userId: "user_learner",
-      lessonId: "lesson_next_intro",
-      content: "The product mindset angle is important: tie every technical choice back to learner value.",
+      lessonId: "lesson_java_intro",
+      content: "Java's strong typing and OOP principles make it ideal for enterprise applications.",
       createdAt: now
     }
   ],
@@ -205,8 +267,8 @@ export const seedData: DemoStore = {
     {
       id: "order_1",
       userId: "user_learner",
-      courseId: "course_python",
-      amountInr: 3199,
+      courseId: "course_java_advanced",
+      amountInr: 4799,
       couponCode: "LAUNCH20",
       status: "pending",
       createdAt: now

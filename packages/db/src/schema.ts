@@ -7,6 +7,7 @@ export const assetKindEnum = pgEnum("asset_kind", ["attachment", "slide", "proje
 export const paymentStatusEnum = pgEnum("payment_status", ["awaiting_payment", "proof_submitted", "approved", "rejected"]);
 export const orderStatusEnum = pgEnum("order_status", ["pending", "approved", "rejected"]);
 export const aiMessageRoleEnum = pgEnum("ai_message_role", ["user", "assistant"]);
+export const auditActionEnum = pgEnum("audit_action", ["course_created", "course_updated", "course_deleted", "course_published", "course_unpublished", "user_created", "payment_approved", "payment_rejected"]);
 
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
@@ -42,6 +43,8 @@ export const courses = pgTable("courses", {
   prerequisites: text("prerequisites").array().notNull(),
   tags: text("tags").array().notNull(),
   featured: boolean("featured").notNull().default(false),
+  pdfLink: text("pdf_link"),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull()
 });
 
@@ -147,7 +150,6 @@ export const certificates = pgTable("certificates", {
 export const aiMessages = pgTable("ai_messages", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => users.id),
-  courseId: text("course_id").notNull().references(() => courses.id),
   lessonId: text("lesson_id").notNull().references(() => lessons.id),
   role: aiMessageRoleEnum("role").notNull(),
   content: text("content").notNull(),
@@ -156,9 +158,11 @@ export const aiMessages = pgTable("ai_messages", {
 
 export const auditLogs = pgTable("audit_logs", {
   id: text("id").primaryKey(),
-  actorUserId: text("actor_user_id").notNull().references(() => users.id),
-  action: text("action").notNull(),
-  targetType: text("target_type").notNull(),
-  targetId: text("target_id").notNull(),
+  userId: text("user_id").notNull().references(() => users.id),
+  action: auditActionEnum("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull(),
+  details: text("details"),
+  ipAddress: text("ip_address"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull()
 });

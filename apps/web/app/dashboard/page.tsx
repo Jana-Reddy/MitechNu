@@ -21,11 +21,23 @@ export default async function DashboardPage() {
     <SectionShell>
       <div className="space-y-10 py-14">
         <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-panel">
-          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">Learner dashboard</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">
+            {user.role === "admin" ? "Admin & Learner dashboard" : "Learner dashboard"}
+          </p>
           <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950">Welcome back, {user.name}</h1>
           <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600">
             Track your active courses, continue lessons, manage payment approvals, and keep study notes in one place.
           </p>
+          {user.role === "admin" ? (
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link href="/admin" className="rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+                Go to Admin Panel
+              </Link>
+              <Link href="/courses" className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-950 hover:text-slate-950">
+                Manage Courses
+              </Link>
+            </div>
+          ) : null}
         </div>
 
         <section className="grid gap-6 lg:grid-cols-[1fr_380px]">

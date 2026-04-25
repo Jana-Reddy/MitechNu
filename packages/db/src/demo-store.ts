@@ -428,7 +428,7 @@ export async function upsertPaymentSettings(input: {
   return settings;
 }
 
-export async function createCourse(input: { title: string; slug: string; excerpt: string; description: string; priceInr: number; categoryId: string }) {
+export async function createCourse(input: { title: string; slug: string; excerpt: string; description: string; priceInr: number; categoryId: string; level?: string; durationHours?: number; tags?: string[]; pdfLink?: string }) {
   const store = await readStore();
   const course: Course = {
     id: randomUUID(),
@@ -438,19 +438,96 @@ export async function createCourse(input: { title: string; slug: string; excerpt
     excerpt: input.excerpt,
     description: input.description,
     coverImage: "https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80",
-    level: "beginner",
+    level: (input.level || "beginner") as "beginner" | "intermediate" | "advanced",
     priceInr: input.priceInr,
-    durationHours: 12,
+    durationHours: input.durationHours || 12,
     status: "draft",
     outcomes: ["Course outcomes to be refined"],
     prerequisites: ["No prerequisites yet"],
-    tags: ["new"],
+    tags: input.tags || ["new"],
     featured: false,
+    pdfLink: input.pdfLink,
     createdAt: new Date().toISOString()
   };
   store.courses.push(course);
   await writeStore(store);
   return course;
+}
+
+export async function updateCourse(input: {
+  courseId: string;
+  title: string;
+  slug: string;
+  excerpt: string;
+  description: string;
+  priceInr: number;
+  categoryId: string;
+  level?: string;
+  durationHours?: number;
+  tags?: string[];
+  pdfLink?: string;
+}) {
+  const store = await readStore();
+  const courseIndex = store.courses.findIndex((c) => c.id === input.courseId);
+  if (courseIndex === -1) {
+    throw new Error("Course not found.");
+  }
+
+  const course = store.courses[courseIndex];
+  const updated: Course = {
+    ...course,
+    title: input.title,
+    slug: input.slug,
+    excerpt: input.excerpt,
+    description: input.description,
+    priceInr: input.priceInr,
+    categoryId: input.categoryId,
+    level: (input.level ?? course.level) as "beginner" | "intermediate" | "advanced",
+    durationHours: input.durationHours ?? course.durationHours,
+    tags: input.tags ?? course.tags,
+    pdfLink: input.pdfLink
+  };
+
+  store.courses[courseIndex] = updated;
+  await writeStore(store);
+  return updated;
+}
+
+export async function deleteCourse(input: { courseId: string; userId?: string }) {
+  const store = await readStore();
+  const courseIndex = store.courses.findIndex((c) => c.id === input.courseId);
+  if (courseIndex === -1) {
+    throw new Error("Course not found.");
+  }
+
+  const course = store.courses[courseIndex];
+
+  // Allow deleting unpublished courses even with enrollments
+  // Only block deletion if course is published and has enrollments
+  if (course.status === "published") {
+    const hasEnrollments = store.enrollments.some((e) => e.courseId === input.courseId);
+    if (hasEnrollments) {
+      throw new Error("Cannot delete published course with active enrollments.");
+    }
+  }
+
+  // Soft delete: set deletedAt timestamp instead of removing
+  store.courses[courseIndex].deletedAt = new Date().toISOString();
+
+  // Log audit entry
+  if (input.userId) {
+    store.auditLogs.push({
+      id: randomUUID(),
+      userId: input.userId,
+      action: "course_deleted",
+      entityType: "course",
+      entityId: input.courseId,
+      details: `Deleted course: ${course.title}`,
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  await writeStore(store);
 }
 
 export async function listCategories() {
