@@ -128,10 +128,17 @@ export default async function CheckoutPage({
         <aside className="rounded-[2rem] border border-slate-200 bg-white p-6">
           <h2 className="text-xl font-bold text-slate-950">Submit UPI proof</h2>
           <p className="mt-3 text-sm leading-6 text-slate-600">Share the UTR or app transaction reference after payment so the admin can verify and activate your access.</p>
-          {paymentConfig.qrCodeUrl ? (
-            <div className="mt-6 rounded-[1.75rem] border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-700">Scan QR to pay</p>
-              <img src={paymentConfig.qrCodeUrl} alt="UPI QR code" className="mt-4 w-full rounded-2xl border border-slate-200 bg-white object-contain" />
+          {paymentConfig.upiIntentUrl ? (
+            <div className="mt-6 rounded-[1.75rem] border border-slate-200 bg-slate-50 p-4 text-center">
+              <p className="text-sm font-semibold text-slate-700 mb-3">Scan QR to pay</p>
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(paymentConfig.upiIntentUrl)}`}
+                alt="UPI QR code"
+                width={200}
+                height={200}
+                className="mx-auto rounded-xl border border-slate-200 bg-white"
+              />
+              <p className="mt-2 text-xs text-slate-500">Scan with any UPI app</p>
             </div>
           ) : null}
           {activeOrder ? (

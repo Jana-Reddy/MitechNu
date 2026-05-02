@@ -6,8 +6,9 @@ import { getCurrentUser } from "../lib/auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Mi.Tech.Nu",
-  description: "Learn modern tech skills with a self-hosted, AI-assisted academy."
+  title: "Mi.Tech.Nu — Learn Tech the Modern Way",
+  description: "A premium online academy for full-stack, AI, and software career tracks. Structured lessons, private media delivery, and AI-assisted study.",
+  icons: { icon: "/logo.png" },
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
@@ -15,7 +16,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
 
   return (
     <html lang="en">
-      <body className="min-h-screen">
+      <body className="min-h-screen antialiased">
         <Header user={user ? { name: user.name ?? "Learner", role: user.role } : null} />
         <main>{children}</main>
         <Footer />

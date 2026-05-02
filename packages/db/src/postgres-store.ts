@@ -344,6 +344,13 @@ export async function getUserById(userId: string) {
   }, () => demoStore.getUserById(userId));
 }
 
+export async function listAllLearners() {
+  return withFallback(async () => {
+    const rows = await db.select().from(users).where(eq(users.role, "learner"));
+    return rows.map((u) => ({ id: u.id, email: u.email, name: u.name }));
+  }, () => demoStore.listAllLearners());
+}
+
 export async function createUser(input: { name: string; email: string; password: string; role?: UserRole }) {
   return withFallback(async () => {
     const email = input.email.toLowerCase();
@@ -680,18 +687,20 @@ export async function reviewPayment(input: { orderId: string; reviewerUserId: st
       throw new Error("Order not found.");
     }
 
-    if (!payment) {
-      throw new Error("Payment proof not submitted yet. Cannot review.");
+    if (!payment && input.decision === "approved") {
+      throw new Error("Cannot approve: no payment proof submitted yet.");
     }
 
-    await db
-      .update(payments)
-      .set({
-        status: input.decision,
-        reviewedBy: input.reviewerUserId,
-        reviewedAt: new Date()
-      })
-      .where(eq(payments.id, payment.id));
+    if (payment) {
+      await db
+        .update(payments)
+        .set({
+          status: input.decision,
+          reviewedBy: input.reviewerUserId,
+          reviewedAt: new Date()
+        })
+        .where(eq(payments.id, payment.id));
+    }
 
     await db
       .update(orders)
@@ -956,9 +965,7 @@ export async function upsertPaymentSettings(input: {
     }
 
     return mapPaymentSettings(updated);
-  }, async () => {
-    throw new Error("Payment settings require the Postgres data layer.");
-  });
+  }, () => demoStore.upsertPaymentSettings(input));
 }
 
 export async function createCourse(input: { title: string; slug: string; excerpt: string; description: string; priceInr: number; categoryId: string; level?: string; durationHours?: number; tags?: string[]; pdfLink?: string }) {
@@ -1063,9 +1070,7 @@ export async function updateCourse(input: {
     }
 
     return mapCourse(updatedCourse);
-  }, async () => {
-    throw new Error("Course editing requires the Postgres data layer.");
-  });
+  }, () => demoStore.updateCourse(input));
 }
 
 export async function setCourseStatus(input: { courseId: string; status: "draft" | "published" }) {
@@ -1092,9 +1097,7 @@ export async function setCourseStatus(input: { courseId: string; status: "draft"
     }
 
     return mapCourse(updatedCourse);
-  }, async () => {
-    throw new Error("Course status change requires the Postgres data layer.");
-  });
+  }, () => demoStore.setCourseStatus(input));
 }
 
 export async function deleteCourse(input: { courseId: string; userId?: string }) {

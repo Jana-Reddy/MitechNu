@@ -85,6 +85,11 @@ export async function getUserById(userId: string) {
   return store.users.find((user) => user.id === userId) ?? null;
 }
 
+export async function listAllLearners() {
+  const store = await readStore();
+  return store.users.filter((u) => u.role === "learner").map((u) => ({ id: u.id, email: u.email, name: u.name }));
+}
+
 export async function createUser(input: { name: string; email: string; password: string; role?: UserRole }) {
   const store = await readStore();
   const exists = store.users.find((user) => user.email.toLowerCase() === input.email.toLowerCase());
@@ -277,15 +282,24 @@ export async function submitPaymentProof(input: { orderId: string; reference: st
 
 export async function reviewPayment(input: { orderId: string; reviewerUserId: string; decision: Extract<PaymentStatus, "approved" | "rejected"> }) {
   const store = await readStore();
-  const payment = store.payments.find((item) => item.orderId === input.orderId);
   const order = store.orders.find((item) => item.id === input.orderId);
-  if (!payment || !order) {
-    throw new Error("Order or payment not found.");
+  if (!order) {
+    throw new Error("Order not found.");
   }
 
-  payment.status = input.decision;
-  payment.reviewedBy = input.reviewerUserId;
-  payment.reviewedAt = new Date().toISOString();
+  const payment = store.payments.find((item) => item.orderId === input.orderId);
+
+  if (payment) {
+    // Update payment record if it exists
+    payment.status = input.decision;
+    payment.reviewedBy = input.reviewerUserId;
+    payment.reviewedAt = new Date().toISOString();
+  } else if (input.decision === "approved") {
+    // Cannot approve without proof — admin must have a UTR reference to verify
+    throw new Error("Cannot approve: no payment proof submitted yet.");
+  }
+  // Rejection without proof is allowed (e.g. cancelling a stale/fraudulent order)
+
   order.status = input.decision === "approved" ? "approved" : "rejected";
 
   if (input.decision === "approved" && !store.enrollments.some((item) => item.userId === order.userId && item.courseId === order.courseId)) {
@@ -451,6 +465,17 @@ export async function createCourse(input: { title: string; slug: string; excerpt
     createdAt: new Date().toISOString()
   };
   store.courses.push(course);
+  await writeStore(store);
+  return course;
+}
+
+export async function setCourseStatus(input: { courseId: string; status: "draft" | "published" }) {
+  const store = await readStore();
+  const course = store.courses.find((c) => c.id === input.courseId);
+  if (!course) {
+    throw new Error("Course not found.");
+  }
+  course.status = input.status;
   await writeStore(store);
   return course;
 }

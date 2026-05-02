@@ -2,13 +2,14 @@
 
 import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
-import { appendAiMessage, authenticateUser, createCourse, createLesson, createLessonAsset, createModule, createNote, createOrder, createUser, deleteCourse, deleteLesson, deleteModule, deleteNote, getAiTutorUsage, getCourseBySlug, getLessonContext, getLearnerLessonView, listOrdersForUser, moveLesson, moveModule, reviewPayment, setCourseStatus, submitPaymentProof, updateCourse, updateLesson, updateModule, updateNote, upsertPaymentSettings, upsertProgress } from "@academy/db";
+import { appendAiMessage, authenticateUser, createCourse, createLesson, createLessonAsset, createModule, createNote, createOrder, createUser, deleteCourse, deleteLesson, deleteModule, deleteNote, getAiTutorUsage, getCourseBySlug, getLessonContext, getLearnerLessonView, listOrdersForUser, moveLesson, moveModule, reviewPayment, setCourseStatus, submitPaymentProof, updateCourse, updateLesson, updateModule, updateNote, upsertPaymentSettings, upsertProgress, listAllLearners } from "@academy/db";
 import { answerLessonQuestion } from "@academy/ai";
 import { clearSession, createSession, getCurrentUser } from "./auth";
 import { cleanOptionalText, cleanText, isValidCourseId, isValidEmail, isValidGoogleDriveUrl, isValidSlug, isValidUpiId, normalizeEmail, normalizeSlug, parseNonNegativeNumber, parsePositiveNumber, sanitizeHtml } from "./validation";
 import { revalidatePath } from "next/cache";
 import { checkRateLimit } from "./rate-limit";
 import { logError, logInfo, logWarn } from "./error-logger";
+import { onCoursePublished } from "./automation";
 
 export async function loginAction(formData: FormData) {
   const email = normalizeEmail(String(formData.get("email") ?? ""));
@@ -139,23 +140,25 @@ export async function updatePaymentSettingsAction(formData: FormData) {
   const upiId = cleanOptionalText(formData.get("upiId"));
   const payeeName = cleanOptionalText(formData.get("payeeName"));
   const qrCodeUrlInput = cleanOptionalText(formData.get("qrCodeUrl"));
-  const qrCodeFile = formData.get("qrCodeFile");
   const note = cleanOptionalText(formData.get("note"));
 
-  if (!upiId || !isValidUpiId(upiId) || !payeeName || payeeName.length > 100) {
+  // Validate UPI only when provided
+  if (upiId && !isValidUpiId(upiId)) {
+    redirect("/admin?error=invalid-payment-settings");
+  }
+  if (payeeName && payeeName.length > 100) {
     redirect("/admin?error=invalid-payment-settings");
   }
 
-  const qrCodeUrl = qrCodeUrlInput;
-
   try {
     await upsertPaymentSettings({
-      upiId,
+      upiId: upiId ?? "",
       payeeName: payeeName ?? "",
-      qrCodeUrl: qrCodeUrl ?? "",
+      qrCodeUrl: qrCodeUrlInput ?? "",
       note: note ?? ""
     });
-  } catch {
+  } catch (error) {
+    console.error("Error in upsertPaymentSettings:", error);
     redirect("/admin?error=payment-settings");
   }
 
@@ -381,13 +384,32 @@ export async function setCourseStatusAction(formData: FormData) {
     redirect("/admin?error=invalid-course-status");
   }
 
+  let publishedCourse: Awaited<ReturnType<typeof setCourseStatus>> | undefined;
   try {
-    await setCourseStatus({
-      courseId,
-      status
-    });
+    publishedCourse = await setCourseStatus({ courseId, status });
   } catch {
     redirect("/admin?error=course-status");
+  }
+
+  // Fire automation when course is published (non-blocking)
+  if (status === "published" && publishedCourse) {
+    try {
+      const learners = await listAllLearners();
+      const learnerEmails = learners.map((l: any) => l.email).filter(Boolean) as string[];
+      onCoursePublished({
+        courseId: publishedCourse.id,
+        courseTitle: publishedCourse.title,
+        courseSlug: publishedCourse.slug,
+        courseExcerpt: publishedCourse.excerpt,
+        priceInr: publishedCourse.priceInr,
+        level: publishedCourse.level,
+        durationHours: publishedCourse.durationHours,
+        publishedByEmail: user!.email,
+        learnerEmails,
+      }).catch((err) => logError(err, { action: "onCoursePublished", courseId }));
+    } catch (err) {
+      logError(err, { action: "onCoursePublished.setup", courseId });
+    }
   }
 
   redirect(`/admin?courseStatus=${status}`);

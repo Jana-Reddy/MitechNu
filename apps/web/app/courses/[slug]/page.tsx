@@ -1,157 +1,173 @@
-﻿import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
-import { Pill, SectionShell } from "@academy/ui";
+import Link from "next/link";
+import { notFound } from "next/navigation";
 import { getCourseBySlug, getDashboardData } from "@academy/db";
 import { getCurrentUser } from "../../../lib/auth";
-import { createOrderAction, setCourseStatusAction } from "../../../lib/actions";
+import { createOrderAction } from "../../../lib/actions";
 import { formatInr } from "../../../lib/utils";
 
 export default async function CourseDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const [course, user] = await Promise.all([getCourseBySlug(slug), getCurrentUser()]);
-
-  if (!course) {
-    notFound();
-  }
+  if (!course) notFound();
 
   const dashboard = user ? await getDashboardData(user.id) : null;
   const activeCourse = dashboard?.activeCourses.find((item: any) => item.id === course.id);
 
+  const levelBadge: Record<string, string> = {
+    beginner: "badge-teal", intermediate: "badge-amber", advanced: "badge-red",
+  };
+
   return (
-    <div className="pb-20">
-      <SectionShell>
-        <section className="grid gap-10 py-14 lg:grid-cols-[1fr_380px]">
+    <div className="min-h-screen">
+      {/* Hero */}
+      <section className="border-b-2 border-[#080808] bg-white">
+        <div className="mx-auto max-w-[1400px] px-6 lg:px-10 py-14">
+          <div className="flex flex-wrap gap-2 mb-5">
+            <span className={`badge ${levelBadge[course.level?.toLowerCase()] ?? "badge-black"}`}>{course.level}</span>
+            <span className="badge badge-black">{course.category?.name ?? "Tech"}</span>
+          </div>
+          <h1 className="text-4xl lg:text-5xl font-700 tracking-tight text-[#080808] leading-[1.05] max-w-3xl">{course.title}</h1>
+          <p className="mt-4 text-base text-[#6B6B65] leading-relaxed max-w-2xl">{course.description}</p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            {[
+              { icon: "⏱", label: `${course.durationHours} hours` },
+              { icon: "📦", label: `${course.modules.length} modules` },
+              { icon: "✓", label: "Certificate included" },
+            ].map(s => (
+              <div key={s.label} className="flex items-center gap-2 border border-[#E0E0D8] bg-white px-4 py-2 text-sm font-600 text-[#080808]">
+                <span>{s.icon}</span>{s.label}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <div className="mx-auto max-w-[1400px] px-6 lg:px-10 py-10">
+        <div className="grid gap-10 lg:grid-cols-[1fr_360px]">
+          {/* Main */}
           <div className="space-y-8">
-            <div className="space-y-4">
-              <Pill>{course.category?.name ?? "Tech"}</Pill>
-              <div className="space-y-4">
-                <h1 className="text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">{course.title}</h1>
-                <p className="max-w-3xl text-lg leading-8 text-slate-600">{course.description}</p>
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-3xl border border-slate-200 bg-white p-5">
-                <p className="text-sm text-slate-500">Level</p>
-                <p className="mt-2 text-lg font-bold capitalize text-slate-950">{course.level}</p>
-              </div>
-              <div className="rounded-3xl border border-slate-200 bg-white p-5">
-                <p className="text-sm text-slate-500">Duration</p>
-                <p className="mt-2 text-lg font-bold text-slate-950">{course.durationHours} hours</p>
-              </div>
-              <div className="rounded-3xl border border-slate-200 bg-white p-5">
-                <p className="text-sm text-slate-500">Modules</p>
-                <p className="mt-2 text-lg font-bold text-slate-950">{course.modules.length}</p>
-              </div>
-            </div>
-
-            {activeCourse ? (
-              <div className="rounded-[2rem] border border-emerald-200 bg-emerald-50 p-6">
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">Enrolled</p>
-                <h2 className="mt-2 text-2xl font-bold text-slate-950">Your learner progress</h2>
-                <p className="mt-3 text-sm leading-6 text-slate-700">
-                  {activeCourse.completedLessons}/{activeCourse.lessonCount} lessons complete • {activeCourse.progress}% complete
-                </p>
-                <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/80">
-                  <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-accent" style={{ width: `${activeCourse.progress}%` }} />
+            {/* Enrolled progress */}
+            {activeCourse && (
+              <div className="card p-6 border-l-4 border-l-[#E63946] bg-white">
+                <p className="text-xs font-700 uppercase tracking-[0.14em] text-[#E63946] mb-2">Enrolled</p>
+                <h2 className="text-xl font-700 text-[#080808] mb-2">Your Progress</h2>
+                <p className="text-sm text-[#6B6B65] mb-4">{activeCourse.completedLessons}/{activeCourse.lessonCount} lessons • {activeCourse.progress}% complete</p>
+                <div className="progress-track mb-5">
+                  <div className="progress-fill" style={{ width: `${activeCourse.progress}%` }} />
                 </div>
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <Link href={activeCourse.resumeLessonSlug ? `/learn/${course.slug}/${activeCourse.resumeLessonSlug}` : `/courses/${course.slug}`} className="rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800">
-                    {activeCourse.progress === 100 ? "Review course" : "Resume learning"}
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    href={activeCourse.resumeLessonSlug ? `/learn/${course.slug}/${activeCourse.resumeLessonSlug}` : `/courses/${course.slug}`}
+                    className="btn-primary btn-sm"
+                  >
+                    {activeCourse.progress === 100 ? "Review Course" : "Resume Learning →"}
                   </Link>
-                  {activeCourse.certificateNumber ? (
-                    <span className="rounded-full border border-emerald-300 px-4 py-3 text-sm font-semibold text-emerald-700">
-                      Certificate: {activeCourse.certificateNumber}
-                    </span>
-                  ) : null}
+                  {activeCourse.certificateNumber && (
+                    <span className="btn-outline btn-sm">✱ Certificate: {activeCourse.certificateNumber}</span>
+                  )}
                 </div>
-                {activeCourse.certificateNumber ? (
-                  <div className="mt-5 rounded-[1.5rem] border border-emerald-200 bg-white/70 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Completion unlocked</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-700">
-                      You finished this course and earned certificate <span className="font-semibold">{activeCourse.certificateNumber}</span>.
-                    </p>
-                  </div>
-                ) : null}
               </div>
-            ) : null}
+            )}
 
-            <div className="grid gap-8 lg:grid-cols-2">
-              <div className="rounded-[2rem] border border-slate-200 bg-white p-6">
-                <h2 className="text-xl font-bold text-slate-950">What you will build</h2>
-                <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-                  {course.outcomes.map((item: any) => (
-                    <li key={item}>• {item}</li>
-                  ))}
-                </ul>
-              </div>
-              <div className="rounded-[2rem] border border-slate-200 bg-white p-6">
-                <h2 className="text-xl font-bold text-slate-950">Prerequisites</h2>
-                <ul className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
-                  {course.prerequisites.map((item: any) => (
-                    <li key={item}>• {item}</li>
-                  ))}
-                </ul>
-              </div>
+            {/* Outcomes + Prerequisites */}
+            <div className="grid gap-5 md:grid-cols-2">
+              {[
+                { title: "What you'll build", items: course.outcomes, marker: "→" },
+                { title: "Prerequisites", items: course.prerequisites, marker: "–" },
+              ].map(section => (
+                <div key={section.title} className="card bg-white p-6">
+                  <h2 className="text-lg font-700 text-[#080808] mb-4">{section.title}</h2>
+                  <ul className="space-y-2.5">
+                    {section.items.map((item: string) => (
+                      <li key={item} className="flex items-start gap-2 text-sm text-[#6B6B65]">
+                        <span className="text-[#E63946] font-700 shrink-0 mt-0.5">{section.marker}</span>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </div>
 
-            <div className="rounded-[2rem] border border-slate-200 bg-white p-6">
-              <h2 className="text-xl font-bold text-slate-950">Curriculum</h2>
-              <div className="mt-6 space-y-4">
-                {course.modules.map((module: any) => (
-                  <div key={module.id} className="rounded-3xl border border-slate-200 p-5">
-                    <h3 className="text-lg font-bold text-slate-950">{module.title}</h3>
-                    <p className="mt-2 text-sm text-slate-600">{module.description}</p>
-                    <div className="mt-4 space-y-3">
-                      {module.lessons.map((lesson: any) => (
-                        <div key={lesson.id} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm">
+            {/* Curriculum */}
+            <div className="card bg-white p-6">
+              <h2 className="text-xl font-700 text-[#080808] mb-6">Curriculum</h2>
+              <div className="space-y-4">
+                {course.modules.map((module: any, idx: number) => (
+                  <div key={module.id} className="border border-[#E0E0D8]">
+                    <div className="bg-[#F5F5EF] px-5 py-4 flex items-center gap-3 border-b border-[#E0E0D8]">
+                      <span className="font-mono text-xs font-700 text-[#E63946] shrink-0">
+                        {String(idx + 1).padStart(2, "0")}
+                      </span>
+                      <div>
+                        <h3 className="font-700 text-[#080808]">{module.title}</h3>
+                        {module.description && <p className="text-xs text-[#6B6B65] mt-0.5">{module.description}</p>}
+                      </div>
+                    </div>
+                    <div>
+                      {module.lessons.map((lesson: any, lessonIdx: number) => (
+                        <div key={lesson.id} className={`flex items-center justify-between px-5 py-3 hover:bg-[#F9F9F5] transition-colors ${lessonIdx < module.lessons.length - 1 ? "border-b border-[#F0F0E8]" : ""}`}>
                           <div>
-                            <p className="font-semibold text-slate-900">{lesson.title}</p>
-                            <p className="text-slate-500">{lesson.type} • {lesson.durationMinutes} min{lesson.isPreview ? " • Preview" : ""}</p>
+                            <p className="text-sm font-600 text-[#080808]">{lesson.title}</p>
+                            <p className="text-xs text-[#9B9B95] mt-0.5">{lesson.type} • {lesson.durationMinutes} min{lesson.isPreview ? " • Free preview" : ""}</p>
                           </div>
-                          <Link href={`/learn/${course.slug}/${lesson.slug}`} className="font-semibold text-accent">
-                            {activeCourse ? "Continue" : "Preview"}
+                          <Link href={`/learn/${course.slug}/${lesson.slug}`} className="text-xs font-700 text-[#E63946] hover:underline shrink-0">
+                            {activeCourse ? "Continue →" : "Preview →"}
                           </Link>
                         </div>
                       ))}
                     </div>
                   </div>
                 ))}
-                {!course.modules.length ? (
-                  <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm leading-6 text-slate-600">
-                    Curriculum is being prepared. Check back soon for the first module release.
+                {!course.modules.length && (
+                  <div className="border-2 border-dashed border-[#E0E0D8] p-8 text-center text-sm text-[#9B9B95]">
+                    Curriculum is being prepared. Check back soon.
                   </div>
-                ) : null}
+                )}
               </div>
             </div>
           </div>
 
-          <aside className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-panel">
-            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">One-time access</p>
-            <p className="mt-4 text-4xl font-black text-slate-950">{formatInr(course.priceInr)}</p>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              Manual payment workflow for open-source-first self-hosting. Create an order, submit your payment reference, and an admin approves access.
-            </p>
-            {activeCourse ? (
-              <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-700">
-                You already have access to this course. Continue learning from your dashboard or jump back into the curriculum.
+          {/* Sticky sidebar */}
+          <aside className="lg:sticky lg:top-24 self-start">
+            <div className="card-float bg-white p-6 space-y-5">
+              <div>
+                <p className="text-xs font-700 uppercase tracking-widest text-[#6B6B65]">One-time access</p>
+                <p className="text-5xl font-700 text-[#080808] mt-2">{formatInr(course.priceInr)}</p>
               </div>
-            ) : (
-              <form action={createOrderAction} className="mt-6 space-y-4">
-                <input type="hidden" name="courseSlug" value={course.slug} />
-                <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-slate-700">Coupon code</span>
-                  <input name="couponCode" placeholder="LAUNCH20" className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none ring-0 transition focus:border-slate-950" />
-                </label>
-                <button className="w-full rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800">
-                  Create order
-                </button>
-              </form>
-            )}
+
+              <div className="space-y-2.5 py-4 border-y border-[#E0E0D8]">
+                {["Lifetime course access", "AI-assisted study tutor", "Progress tracking & notes", "Completion certificate", "Admin-verified payment"].map(item => (
+                  <div key={item} className="flex items-center gap-2.5 text-sm text-[#6B6B65]">
+                    <span className="h-4 w-4 bg-[#080808] flex items-center justify-center text-white text-[10px] font-700 shrink-0">✓</span>
+                    {item}
+                  </div>
+                ))}
+              </div>
+
+              {activeCourse ? (
+                <div className="border border-[#5BADAF] bg-[#F0FAFA] p-4 text-sm text-[#2B7A7A] font-600">
+                  ✓ You already have access. Continue from your dashboard.
+                </div>
+              ) : (
+                <form action={createOrderAction} className="space-y-3">
+                  <input type="hidden" name="courseSlug" value={course.slug} />
+                  <div>
+                    <label className="block text-xs font-700 uppercase tracking-widest text-[#080808] mb-2">Coupon Code</label>
+                    <input name="couponCode" placeholder="LAUNCH20" className="input-field text-sm" />
+                  </div>
+                  <button className="btn-primary w-full justify-center py-3.5">
+                    Enroll Now — {formatInr(course.priceInr)}
+                  </button>
+                  <p className="text-xs text-[#9B9B95] text-center leading-relaxed">
+                    Pay via UPI → submit reference → admin approves access
+                  </p>
+                </form>
+              )}
+            </div>
           </aside>
-        </section>
-      </SectionShell>
+        </div>
+      </div>
     </div>
   );
 }
-

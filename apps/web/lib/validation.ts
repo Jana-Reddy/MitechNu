@@ -76,7 +76,8 @@ export function isValidUpiId(value: string): boolean {
 }
 
 export function isValidCourseId(value: string): boolean {
-  // UUID format validation
+  // Accept UUID format OR slug-style IDs (e.g. course_sde, lesson-intro)
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return uuidPattern.test(value);
+  const slugIdPattern = /^[a-zA-Z0-9_-]{2,80}$/;
+  return uuidPattern.test(value) || slugIdPattern.test(value);
 }

@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { Pill, SectionShell } from "@academy/ui";
 
 interface SectionTitleProps {
   label: string;
@@ -10,18 +9,18 @@ interface SectionTitleProps {
 
 export function SectionTitle({ label, title, description, actions }: SectionTitleProps) {
   return (
-    <SectionShell>
-      <div className="flex flex-col gap-6 py-8 md:flex-row md:items-end md:justify-between">
-        <div className="max-w-3xl space-y-4">
-          <Pill>{label}</Pill>
-          <div className="space-y-3">
-            <h2 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{title}</h2>
-            <p className="text-base leading-7 text-slate-600">{description}</p>
-          </div>
+    <div className="mx-auto max-w-[1400px] px-6 lg:px-10">
+      <div className="flex flex-col gap-6 py-12 md:flex-row md:items-end md:justify-between border-b-2 border-[#E0E0D8]">
+        <div className="max-w-3xl space-y-3">
+          <p className="section-tag">
+            <span className="h-1.5 w-1.5 bg-[#E63946] inline-block rounded-full" />
+            {label}
+          </p>
+          <h2 className="text-4xl lg:text-5xl font-700 tracking-tight text-[#080808]">{title}</h2>
+          <p className="text-base leading-relaxed text-[#6B6B65]">{description}</p>
         </div>
-        {actions}
+        {actions && <div>{actions}</div>}
       </div>
-    </SectionShell>
+    </div>
   );
 }
-
